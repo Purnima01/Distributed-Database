@@ -1,10 +1,7 @@
-//TODO: Check debs and possopts
-//Remember to skip 0th site for sites
+
 import java.io.FileNotFoundException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.List;
+import java.util.*;
+
 /**
  * This class is responsible for coordinating the
  * activities of all the transactions on the distributed
@@ -13,10 +10,9 @@ import java.util.List;
  */
 public class TransactionManager {
     static final int SITES = 11;
-    static final int VARIABLES = 21;
     private int time = 0;
 
-    private Map<Transaction, TransactionStatus> transactionMap;
+    private Map<String, Transaction> transactionMap;
     //Variables and the sites they are present on
     private Map<String, List<Site>> variableLocationMap;
     private Map<String, List<ValueTimeStamp>> variableMap;
@@ -29,7 +25,7 @@ public class TransactionManager {
     public TransactionManager() {
         variableLocationMap = new HashMap<String, List<Site>>();
         variableMap = new HashMap<String, List<ValueTimeStamp>>();
-        transactionMap = new HashMap<Transaction, TransactionStatus>();
+        transactionMap = new HashMap<String, Transaction>();
         sites = new Site[SITES];
         pendingCommands = new ArrayList<Command>();
     }
@@ -106,20 +102,151 @@ public class TransactionManager {
         time ++;
     }
 
+    private void putCommandInPendingListIfAbsent(Command cmd) {
+        if (!cmd.isInPendingList()) {
+            cmd.setInPendingList(true);
+            pendingCommands.add(cmd);
+        }
+    }
+
+    private void removeCommandFromPendingListIfPresent(Command cmd) {
+        if (cmd.isInPendingList()) {
+            cmd.setInPendingList(false);
+            pendingCommands.remove(cmd);
+        }
+    }
+
+    private void updateSiteAndTransactionRecords(Site serveSite, Transaction txn) {
+        serveSite.addTxnToSite(txn.getId());
+        txn.addSiteToTxn(serveSite.getId());
+    }
+
     public static void main(String[] args) throws FileNotFoundException {
         TransactionManager tm = new TransactionManager();
         ReadFileInput rf = new ReadFileInput("/Users/purnima/Desktop/adbms/Project/tests");
 
         tm.initialize();
 
-        /*while (rf.hasNextLine()) {
+        while (rf.hasNextLine()) {
             tm.incrementTime();
             List<Command> cmdsForLine = rf.getLineAsCommands();
-            System.out.println("At time = " + tm.getTime() + ": ");
-            for (Command c : cmdsForLine) {
-                System.out.print(c.getOperation() + " ");
+
+            /*todo: for each command, do corresponding task
+            once all the commands in line have been processed, check if any pending txns can be processed now*/
+            for (Command cmd : cmdsForLine) {
+                switch (cmd.getOperation()) {
+
+                    case BEGIN:
+                        String txnID = cmd.getTransaction();
+                        Transaction txn = new Transaction(tm.getTime(), txnID, TransactionType.REGULAR);
+                        tm.transactionMap.put(txnID, txn);
+                        break;
+
+                    case BEGINRO:
+                        txnID = cmd.getTransaction();
+                        txn = new Transaction(tm.getTime(), txnID, TransactionType.READONLY);
+                        tm.transactionMap.put(txnID, txn);
+                        break;
+
+                    case END:
+                        txnID = cmd.getTransaction();
+                        Transaction txnAboutToCommit = tm.transactionMap.get(txnID);
+                        txnAboutToCommit.commit();
+                        break;
+
+                    case READ:
+                        txnID = cmd.getTransaction();
+                        txn = tm.transactionMap.get(txnID);
+                        String varToAccess = cmd.getVar();
+
+                        if (txn.getType() == TransactionType.READONLY) {
+                            tm.processROtxn(txn, varToAccess, cmd);
+                        } else {
+                            //regular read
+                        }
+                        break;
+
+                    case RECOVER:
+                        //non - replicated vars (odd) - set their map to true
+                        //replicated vars (even) - set their map to false until written to
+                        break;
+
+                    case FAIL:
+                        int siteNumberToFail = cmd.getSiteAffected();
+                        tm.processFail(siteNumberToFail);
+                        break;
+
+                    case WRITE:
+                        break;
+                    //deal with pending list
+                }
             }
-            System.out.println();
-        }*/
+        }
+        System.out.println("Number of pending commands = " + tm.pendingCommands.size());
+    }
+
+    private void processFail(int siteNumberToFail) {
+        Site siteToFail = sites[siteNumberToFail];
+        siteToFail.setSiteStatus(SiteStatus.FAILED);
+        Set<String> allTransactionsOnSite = siteToFail.getTransactionsOnSite();
+        List<Transaction> abortTxnListForSite = new ArrayList<Transaction>();
+
+        for (String transID : allTransactionsOnSite) {
+            Transaction correspondingTransaction = transactionMap.get(transID);
+            abortTxnListForSite.add(correspondingTransaction);
+        }
+
+        for (Transaction transaction : abortTxnListForSite) {
+            String reasonForAbort = ("site " + siteNumberToFail + " has failed");
+            transaction.abort(sites, reasonForAbort);
+        }
+    }
+
+    private void processROtxn(Transaction txn, String varToAccess, Command cmd) {
+        if (txn.getStatus() == TransactionStatus.COMMITTED) {
+            return;
+        }
+        if (txn.getStatus() == TransactionStatus.ABORTED) {
+            return;
+        }
+
+        int startTimeTxn = txn.getStartTime();
+        List<Site> sitesWithVar = variableLocationMap.get(varToAccess);
+        Site serveSite = null;
+        for (Site site : sitesWithVar) {
+            if (site.getSiteStatus() == SiteStatus.FAILED) {
+                continue;
+            }
+            if (site.getSiteStatus() == SiteStatus.RECOVERED && !site.canReadVariable(varToAccess)) {
+                continue;
+            }
+            serveSite = site;
+            break;
+        }
+        //txn has to wait till site becomes available - add cmd to pendinglist
+        if (serveSite == null) {
+            putCommandInPendingListIfAbsent(cmd);
+            return;
+        } else {
+            //site is available - if cmd was in pendinglist, remove it
+            removeCommandFromPendingListIfPresent(cmd);
+
+            //in case of site failure
+            updateSiteAndTransactionRecords(serveSite, txn);
+
+            List<ValueTimeStamp> valueHistoryForVariable =
+                    variableMap.get(varToAccess);
+            int index = 0;
+            while (index < valueHistoryForVariable.size()) {
+                if (valueHistoryForVariable.get(index).getTime() <= startTimeTxn) {
+                    index ++;
+                }
+            }
+            index --;
+            int valueOfVariableReadByROTxn = valueHistoryForVariable.get(index).getValue();
+            System.out.println("Value read by " + txn.getId() +
+                    " is " + valueOfVariableReadByROTxn +
+                    " from site " + serveSite.getId());
+        }
     }
 }

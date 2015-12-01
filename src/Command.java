@@ -12,6 +12,7 @@ public class Command {
     private Integer toWriteValue;
     //for fail/recover:
     private int siteAffected;
+    private boolean inPendingList = false;
 
     /**
      * use this for fail/recover cmds
@@ -44,6 +45,14 @@ public class Command {
      */
     public Command(Operation op) {
         operation = op;
+    }
+
+    public boolean isInPendingList() {
+        return inPendingList;
+    }
+
+    public void setInPendingList(boolean val) {
+        inPendingList = val;
     }
 
     public Operation getOperation() {

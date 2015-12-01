@@ -6,26 +6,52 @@ import java.util.*;
 public class Site {
     private int id;
     private SiteStatus siteStatus;
-    private Set<String> variablesOnSite;
-    //String below corresponds to variable that is locked
-    private Map<String, List<Lock>> lockMap;
+    //Variables on site and whether that variable can be read from this site
+    private Map<String, Boolean> variablesOnSite;
+    //Transactions that accessed any data item on this site
+    private Set<String> transactionsOnSite;
     public Site(int siteID) {
         siteStatus = SiteStatus.ACTIVE;
         id = siteID;
-        variablesOnSite = new HashSet<String>();
-        lockMap = new HashMap<String, List<Lock>>();
+        variablesOnSite = new HashMap<String, Boolean>();
+        transactionsOnSite = new HashSet<String>();
+    }
+
+    //some ds for variable, txn holding lock on var, lock details
+
+    public SiteStatus getSiteStatus() {
+        return siteStatus;
+    }
+
+    public void setSiteStatus(SiteStatus newStatus) {
+        siteStatus = newStatus;
     }
 
     public int getId() {
         return id;
     }
 
-    public Set<String> getVariablesOnSite() {
+    public Map<String, Boolean> getVariablesOnSite() {
         return variablesOnSite;
     }
 
     public void addVariableToSite(String variable) {
-        variablesOnSite.add(variable);
+        variablesOnSite.put(variable, true);
     }
 
+    public void addTxnToSite(String txnid) {
+        transactionsOnSite.add(txnid);
+    }
+
+    public boolean canReadVariable(String varToAccess) {
+        return variablesOnSite.get(varToAccess);
+    }
+
+    public Set<String> getTransactionsOnSite() {
+        return transactionsOnSite;
+    }
+
+    public void removeTransaction(String txid) {
+        transactionsOnSite.remove(txid);
+    }
 }
