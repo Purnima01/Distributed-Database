@@ -152,13 +152,15 @@ public class TransactionManager {
 
                     case BEGIN:
                         String txnID = cmd.getTransaction();
-                        Transaction txn = new Transaction(tm.getTime(), txnID, TransactionType.REGULAR);
+                        Transaction txn = new Transaction(tm.getTime(),
+                                txnID, TransactionType.REGULAR);
                         tm.transactionMap.put(txnID, txn);
                         break;
 
                     case BEGINRO:
                         txnID = cmd.getTransaction();
-                        txn = new Transaction(tm.getTime(), txnID, TransactionType.READONLY);
+                        txn = new Transaction(tm.getTime(),
+                                txnID, TransactionType.READONLY);
                         tm.transactionMap.put(txnID, txn);
                         break;
 
@@ -247,6 +249,7 @@ public class TransactionManager {
         }
     }
 
+    /*Used by RW txns only*/
     private void printVariableValueRead(String varToAccess, Transaction txn) {
         List<ValueTimeStamp> valueHistoryForVariable = variableMap.get(varToAccess);
         int size = valueHistoryForVariable.size();
@@ -255,28 +258,25 @@ public class TransactionManager {
                 + txn.getId() + " is " + valueOfVariable);
     }
 
-    private void processRWtxn(Transaction txn, String varToAccess, Command cmd) {
-        //TODO: clean up next 2 cases
+    private boolean canRunTxn(Transaction txn) {
         if (txn.getStatus() == TransactionStatus.COMMITTED) {
-            return;
+            return false;
         }
         if (txn.getStatus() == TransactionStatus.ABORTED) {
-            return;
+            return false;
         }
+        return true;
+    }
 
-        if (txn.variablePresentInModifiedVariables(varToAccess)) {
-            txn.readValueFromModifiedVariables(varToAccess);
-            return;
-        }
-
-        int starttime = txn.getStartTime();
+    private Site findSiteThatCanServeRequestedVariable(String varToAccess, Transaction txn) {
         List<Site> sitesWithVariable = variableLocationMap.get(varToAccess);
         Site serveSite = null;
         for (Site site : sitesWithVariable) {
             if (site.getSiteStatus() == SiteStatus.FAILED) {
                 continue;
             }
-            if (site.getSiteStatus() == SiteStatus.RECOVERED && !site.canReadVariable(varToAccess)) {
+            if (site.getSiteStatus() == SiteStatus.RECOVERED &&
+                    !site.canReadVariable(varToAccess)) {
                 System.out.println("Transaction " + txn.getId() +
                         " cannot read variable " + varToAccess +
                         " on site " + site.getId() +
@@ -287,6 +287,57 @@ public class TransactionManager {
             serveSite = site;
             break;
         }
+        return serveSite;
+    }
+
+    private boolean existsWriteLockOnVariableByAnotherTransaction(Command cmd,
+           String varToAccess, Transaction currentTxn, Site serveSite) {
+
+        List<Lock> locksOnVariableOnServeSite = serveSite.getLocksForVariable(varToAccess);
+        //no locks for this variable on site yet
+        if (locksOnVariableOnServeSite == null) {
+            return false;
+        }
+
+        for (Lock lock : locksOnVariableOnServeSite) {
+            if (lock.getTypeOfLock() == LockType.WRITELOCK) {
+                String txnIdHoldingLock = lock.getTxnIdHoldingLock();
+                Transaction txnHoldingLock = transactionMap.get(txnIdHoldingLock);
+                if (currentTxn.isYoungerThan(txnHoldingLock)) {
+                    String reasonForAbort = ("Transaction " + currentTxn.getId() +
+                            " was aborted (wait-die) because it was waiting on a lock" +
+                            " held by Transaction " + txnHoldingLock.getId());
+                    currentTxn.abort(sites, reasonForAbort);
+                } else {
+                    //currentTxn is older than owner of lock; so it must wait for owner to complete
+                    pendingCommands.add(cmd);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void addReadLock(String varToAccess, Site serveSite, Transaction currentTxn) {
+        Lock newReadLock = new Lock(currentTxn.getId(),
+                serveSite.getId(), varToAccess, LockType.READLOCK);
+        serveSite.addToLockMap(newReadLock);
+
+        updateSiteAndTransactionRecords(serveSite, currentTxn);
+        printVariableValueRead(varToAccess, currentTxn);
+    }
+
+    private void processRWtxn(Transaction txn, String varToAccess, Command cmd) {
+        if (!canRunTxn(txn)) {
+            return;
+        }
+
+        if (txn.variablePresentInModifiedVariables(varToAccess)) {
+            txn.readValueFromModifiedVariables(varToAccess);
+            return;
+        }
+
+        Site serveSite = findSiteThatCanServeRequestedVariable(varToAccess, txn);
         //txn has to wait till site becomes available - add cmd to pendinglist
         if (serveSite == null) {
             putCommandInPendingListIfAbsent(cmd);
@@ -299,62 +350,23 @@ public class TransactionManager {
         }
 
         Transaction currentTxn = txn;
-        //get list of locks on the variable from serve site
-        List<Lock> locksOnVariableOnServeSite = serveSite.getLocksForVariable(varToAccess);
-        //no locks for this variable on site yet
-        if (locksOnVariableOnServeSite != null) {
-            for (Lock lock : locksOnVariableOnServeSite) {
-                if (lock.getTypeOfLock() == LockType.WRITELOCK) {
-                    String txnIdHoldingLock = lock.getTxnIdHoldingLock();
-                    Transaction txnHoldingLock = transactionMap.get(txnIdHoldingLock);
-                    if (currentTxn.isYoungerThan(txnHoldingLock)) {
-                        String reasonForAbort = ("Transaction " + currentTxn.getId() +
-                                " was aborted (wait-die) because it was waiting on a lock" +
-                                " held by Transaction " + txnHoldingLock.getId());
-                        currentTxn.abort(sites, reasonForAbort);
-                    } else {
-                        //current transaction is older than owner of lock; so it must wait for owner to complete
-                        pendingCommands.add(cmd);
-                    }
-                    return;
-                }
-            }
-        }
-        //if no write lock (all read locks or no locks), add a read lock to the var on site
-        Lock newReadLock = new Lock(currentTxn.getId(),
-                serveSite.getId(), varToAccess, LockType.READLOCK);
-        serveSite.addToLockMap(newReadLock);
 
-        updateSiteAndTransactionRecords(serveSite, currentTxn);
-        printVariableValueRead(varToAccess, txn);
+        if (existsWriteLockOnVariableByAnotherTransaction(cmd, varToAccess,
+                currentTxn, serveSite)) {
+            return;
+        }
+
+        //no write lock, safe to add a read lock to the var on site
+        addReadLock(varToAccess, serveSite, currentTxn);
     }
 
     private void processROtxn(Transaction txn, String varToAccess, Command cmd) {
-        if (txn.getStatus() == TransactionStatus.COMMITTED) {
-            return;
-        }
-        if (txn.getStatus() == TransactionStatus.ABORTED) {
+        if (!canRunTxn(txn)) {
             return;
         }
 
         int startTimeTxn = txn.getStartTime();
-        List<Site> sitesWithVar = variableLocationMap.get(varToAccess);
-        Site serveSite = null;
-        for (Site site : sitesWithVar) {
-            if (site.getSiteStatus() == SiteStatus.FAILED) {
-                continue;
-            }
-            if (site.getSiteStatus() == SiteStatus.RECOVERED && !site.canReadVariable(varToAccess)) {
-                System.out.println("Transaction " + txn.getId() +
-                        " cannot read variable " + varToAccess +
-                        " on site " + site.getId() +
-                        " because the site was recovered and the" +
-                        " replicated data item is yet to be written to.");
-                continue;
-            }
-            serveSite = site;
-            break;
-        }
+        Site serveSite = findSiteThatCanServeRequestedVariable(varToAccess, txn);
         //txn has to wait till site becomes available - add cmd to pendinglist
         if (serveSite == null) {
             putCommandInPendingListIfAbsent(cmd);
@@ -368,6 +380,7 @@ public class TransactionManager {
 
             List<ValueTimeStamp> valueHistoryForVariable =
                     variableMap.get(varToAccess);
+
             int index = 0;
             while (index < valueHistoryForVariable.size()) {
                 if (valueHistoryForVariable.get(index).getTime() <= startTimeTxn) {
@@ -375,10 +388,19 @@ public class TransactionManager {
                 }
             }
             index --;
-            int valueOfVariableReadByROTxn = valueHistoryForVariable.get(index).getValue();
-            System.out.println("Value read by " + txn.getId() +
-                    " is " + valueOfVariableReadByROTxn +
-                    " from site " + serveSite.getId());
+
+            printVariableValueReadByROTransaction(index,
+                    valueHistoryForVariable, txn, serveSite);
         }
+    }
+
+    private void printVariableValueReadByROTransaction(int index,
+            List<ValueTimeStamp> valueHistoryForVariable,
+            Transaction txn, Site serveSite) {
+
+        int valueOfVariableReadByROTxn = valueHistoryForVariable.get(index).getValue();
+        System.out.println("Value read by " + txn.getId() +
+                " is " + valueOfVariableReadByROTxn +
+                " from site " + serveSite.getId());
     }
 }

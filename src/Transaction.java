@@ -145,6 +145,7 @@ public class Transaction {
         return locksHeldByTxn.containsKey(siteId);
     }
 
+    /**Reads value from local storage if exists*/
     public void readValueFromModifiedVariables(String varToAccess) {
         System.out.println("Value of " + varToAccess +  " read by "
                 + getId() + " is " + modifiedVariables.get(varToAccess));
