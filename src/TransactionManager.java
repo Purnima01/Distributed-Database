@@ -11,7 +11,6 @@
 * TODO: somehow merge sites accessed set and lock info (also has sites accessed as key in Reg txns)..duplicate ds for same infor!
 */
 
-
 import java.io.FileNotFoundException;
 import java.util.*;
 
@@ -393,18 +392,19 @@ public class TransactionManager {
             }
             index --;
 
-            printVariableValueReadByROTransaction(index,
+            printVariableValueReadByROTransaction(index, varToAccess,
                     valueHistoryForVariable, txn, serveSite);
         }
     }
 
     private void printVariableValueReadByROTransaction(int index,
+            String varToAccess,
             List<ValueTimeStamp> valueHistoryForVariable,
             Transaction txn, Site serveSite) {
 
         int valueOfVariableReadByROTxn = valueHistoryForVariable.get(index).getValue();
-        System.out.println("Value read by " + txn.getId() +
-                " is " + valueOfVariableReadByROTxn +
-                " from site " + serveSite.getId());
+        System.out.println("Value of " + varToAccess + " read by "
+                + txn.getId() + " is " + valueOfVariableReadByROTxn
+                + " at site " + serveSite.getId());
     }
 }
