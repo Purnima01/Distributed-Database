@@ -10,11 +10,16 @@ public class Site {
     private Map<String, Boolean> variablesOnSite;
     //Transactions that accessed any data item on this site
     private Set<String> transactionsOnSite;
+    //string corresponds to variable that is locked on site
+    private Map<String, List<Lock>> lockMap;
+
+
     public Site(int siteID) {
         siteStatus = SiteStatus.ACTIVE;
         id = siteID;
         variablesOnSite = new HashMap<String, Boolean>();
         transactionsOnSite = new HashSet<String>();
+        lockMap = new HashMap<String, List<Lock>>();
     }
 
     //some ds for variable, txn holding lock on var, lock details
@@ -57,5 +62,21 @@ public class Site {
 
     public void removeTransaction(String txid) {
         transactionsOnSite.remove(txid);
+    }
+
+    public List<Lock> getLocksForVariable(String var) {
+        return lockMap.get(var);
+    }
+
+    public void addToLockMap(Lock newReadLock) {
+        String variable = newReadLock.getVariableLocked();
+        List<Lock> locksForVariable;
+        if (!lockMap.containsKey(variable)) {
+            locksForVariable = new ArrayList<Lock>();
+        } else {
+            locksForVariable = lockMap.get(variable);
+        }
+        locksForVariable.add(newReadLock);
+        lockMap.put(variable, locksForVariable);
     }
 }

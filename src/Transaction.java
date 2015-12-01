@@ -8,27 +8,27 @@ public class Transaction {
     private String id;
     private TransactionStatus status;
 
+    //integer corresponds to site where lock is held
+    private Map<Integer, List<Lock>> locksHeldByTxn;
     private Set<Integer> sitesAccessed;
     private Map<String, Integer> modifiedVariables;
     /*
      * modifiedVariables:
      * Local cache for written-to variables;
      * String = variable name, Integer = value written by txn
-     * unmodifiedVariablesAccessed:
-     * Set of all the read variables accessed -
-     * needed in case of abortion/commit, to release read locks
      */
-    private List<String> unmodifiedVariablesAccessed;
     private final TransactionType type;
 
     public Transaction(int beginTime, String txnId, TransactionType txnType) {
         modifiedVariables = new HashMap<String, Integer>();
-        unmodifiedVariablesAccessed = new ArrayList<String>();
         startTime = beginTime;
         id = txnId;
         status = TransactionStatus.ACTIVE;
         type = txnType;
         sitesAccessed = new HashSet<Integer>();
+        if (type == TransactionType.REGULAR) {
+            locksHeldByTxn = new HashMap<Integer, List<Lock>>();
+        }
     }
 
     public void setStatus(TransactionStatus newStatus) {
@@ -79,7 +79,7 @@ public class Transaction {
         System.out.println("Transaction " + id + " has been aborted because " + reasonForAbort);
 
         if (type == TransactionType.REGULAR) {
-            //if non-RO release all locks (unmodifiedVariablesAccessed + modifiedVariables) on variables held by transaction
+            //if non-RO release all locks (unmodifiedVariablesAccessed + modifiedVariables) on variables held by transaction on sites
         }
         //flush my modified variables to claim space - set to null
     }
@@ -119,21 +119,35 @@ public class Transaction {
         modifiedVariables.put(variable, currentValue);
     }
 
-    /**
-     * TM calls this when a txn wants to read a variable:
-     * 1. The variable is not present in modifiedVariables
-     * 2. This txn has obtained the lock on the variable
-     */
-    public void addVariableToReadVariables(String variable) {
-        unmodifiedVariablesAccessed.add(variable);
-    }
-
     public boolean variablePresentInModifiedVariables(String variable) {
         return (modifiedVariables.containsKey(variable));
     }
 
     public void addSiteToTxn(int siteid) {
         sitesAccessed.add(siteid);
+    }
+
+    public void addLockInformationToTransaction(Lock lock) {
+        int siteOnWhichLockIsHeld = lock.getSiteIdOnWhichLockExists();
+
+        if (locksHeldByTxn.containsKey(siteOnWhichLockIsHeld)) {
+            List<Lock> locksOnSite = locksHeldByTxn.get(siteOnWhichLockIsHeld);
+            locksOnSite.add(lock);
+            locksHeldByTxn.put(siteOnWhichLockIsHeld, locksOnSite);
+        } else {
+            List<Lock> locksOnSite = new ArrayList<Lock>();
+            locksOnSite.add(lock);
+            locksHeldByTxn.put(siteOnWhichLockIsHeld, locksOnSite);
+        }
+    }
+
+    public boolean alreadyHasLockOnSite(int siteId) {
+        return locksHeldByTxn.containsKey(siteId);
+    }
+
+    public void readValueFromModifiedVariables(String varToAccess) {
+        System.out.println("Value of " + varToAccess +  " read by "
+                + getId() + " is " + modifiedVariables.get(varToAccess));
     }
 }
 
