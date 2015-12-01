@@ -178,7 +178,7 @@ public class TransactionManager {
                         if (txn.getType() == TransactionType.READONLY) {
                             tm.processROtxn(txn, varToAccess, cmd);
                         } else {
-                            //regular read
+                            tm.processRWtxn(txn, varToAccess, cmd);
                         }
                         break;
 
@@ -250,12 +250,15 @@ public class TransactionManager {
     }
 
     /*Used by RW txns only*/
-    private void printVariableValueRead(String varToAccess, Transaction txn) {
+    private void printVariableValueRead(String varToAccess,
+          Transaction txn, Site serveSite) {
+
         List<ValueTimeStamp> valueHistoryForVariable = variableMap.get(varToAccess);
         int size = valueHistoryForVariable.size();
         int valueOfVariable = valueHistoryForVariable.get(size - 1).getValue();
         System.out.println("Value of " + varToAccess +  " read by "
-                + txn.getId() + " is " + valueOfVariable);
+                + txn.getId() + " is " + valueOfVariable
+                + " at site " + serveSite.getId());
     }
 
     private boolean canRunTxn(Transaction txn) {
@@ -323,8 +326,9 @@ public class TransactionManager {
                 serveSite.getId(), varToAccess, LockType.READLOCK);
         serveSite.addToLockMap(newReadLock);
 
+        currentTxn.addLockInformationToTransaction(newReadLock);
         updateSiteAndTransactionRecords(serveSite, currentTxn);
-        printVariableValueRead(varToAccess, currentTxn);
+        printVariableValueRead(varToAccess, currentTxn, serveSite);
     }
 
     private void processRWtxn(Transaction txn, String varToAccess, Command cmd) {
@@ -345,7 +349,7 @@ public class TransactionManager {
         }
 
         if (txn.alreadyHasLockOnSite(serveSite.getId())) {
-            printVariableValueRead(varToAccess, txn);
+            printVariableValueRead(varToAccess, txn, serveSite);
             return;
         }
 
