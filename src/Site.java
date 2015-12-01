@@ -51,6 +51,10 @@ public class Site {
         return transactionsOnSite;
     }
 
+    public void clearTransactionsOnSite() {
+        transactionsOnSite.clear();
+    }
+
     public void removeTransaction(String txid) {
         transactionsOnSite.remove(txid);
     }

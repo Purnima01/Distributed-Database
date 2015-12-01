@@ -1,3 +1,15 @@
+//TODO: Check debs and todos
+//Remember to skip 0th site for sites
+//what happens if a site fails - suppose t1 acc. x4 on site1
+//and t2 acc. x4 on site2 and site1 fails, do we kill t1 & t2?
+//what about for write txns?
+
+/*TODO: remove comments that are not needed
+* TODO: mention in javadocs whenever objects are returned from getters and not their copies.
+* TODO: changes propagate to the actual object.
+* TODO: change "variable" in print statements to "data item"
+*/
+
 
 import java.io.FileNotFoundException;
 import java.util.*;
@@ -85,6 +97,7 @@ public class TransactionManager {
                 List<Site> location = new ArrayList<Site>();
                 location.add(siteLocatedAt);
                 variableLocationMap.put(varName, location);
+                siteLocatedAt.addVariableToSite(varName);
             }
         }
     }
@@ -167,8 +180,8 @@ public class TransactionManager {
                         break;
 
                     case RECOVER:
-                        //non - replicated vars (odd) - set their map to true
-                        //replicated vars (even) - set their map to false until written to
+                        int siteNumberToRecover = cmd.getSiteAffected();
+                        tm.processRecovery(siteNumberToRecover);
                         break;
 
                     case FAIL:
@@ -183,6 +196,35 @@ public class TransactionManager {
             }
         }
         System.out.println("Number of pending commands = " + tm.pendingCommands.size());
+    }
+
+    private void processRecovery(int siteNumberToRecover) {
+        Site siteToRecover = sites[siteNumberToRecover];
+        siteToRecover.setSiteStatus(SiteStatus.RECOVERED);
+        Map<String, Boolean> variablesOnSite = siteToRecover.getVariablesOnSite();
+        List<String> blockReadsToVariableList = new ArrayList<String>();
+
+        for(Map.Entry<String, Boolean> entry : variablesOnSite.entrySet()) {
+            String variable = entry.getKey();
+            if (isEven(variable)) {
+                blockReadsToVariableList.add(variable);
+            }
+        }
+
+        for (String variable : blockReadsToVariableList) {
+            variablesOnSite.put(variable, false);
+        }
+
+        siteToRecover.clearTransactionsOnSite();
+    }
+
+    private boolean isEven(String variable) {
+        //0th character is 'x' in 'x20'
+        int varNum = Integer.parseInt(variable.substring(1));
+        if ((varNum % 2) == 0) {
+            return true;
+        }
+        return false;
     }
 
     private void processFail(int siteNumberToFail) {
@@ -218,6 +260,11 @@ public class TransactionManager {
                 continue;
             }
             if (site.getSiteStatus() == SiteStatus.RECOVERED && !site.canReadVariable(varToAccess)) {
+                System.out.println("Transaction " + txn.getId() +
+                        " cannot read variable " + varToAccess +
+                        " on site " + site.getId() +
+                        " because the site was recovered and the" +
+                        " replicated data item is yet to be written to.");
                 continue;
             }
             serveSite = site;
