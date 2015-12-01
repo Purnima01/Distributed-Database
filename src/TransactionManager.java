@@ -1,15 +1,3 @@
-//TODO: Check debs and todos
-//Remember to skip 0th site for sites
-//what happens if a site fails - suppose t1 acc. x4 on site1
-//and t2 acc. x4 on site2 and site1 fails, do we kill t1 & t2?
-//what about for write txns?
-
-/*TODO: remove comments that are not needed
-* TODO: mention in javadocs whenever objects are returned from getters and not their copies.
-* TODO: changes propagate to the actual object.
-* TODO: change "variable" in print statements to "data item"
-*/
-
 
 import java.io.FileNotFoundException;
 import java.util.*;
