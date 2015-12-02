@@ -413,7 +413,7 @@ public class TransactionManager {
 
             int index = 0;
             while (index < valueHistoryForVariable.size()) {
-                if (valueHistoryForVariable.get(index).getTime() <= startTimeTxn) {
+                if (valueHistoryForVariable.get(index).getTime() < startTimeTxn) {
                     index ++;
                 }
             }
