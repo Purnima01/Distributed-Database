@@ -170,5 +170,9 @@ public class Transaction {
         System.out.println("Value of " + varToAccess +  " read by "
                 + getId() + " is " + modifiedVariables.get(varToAccess));
     }
+
+    public void writeToLocalValue(String varToAccess, int valToWrite) {
+        modifiedVariables.put(varToAccess, valToWrite);
+    }
 }
 

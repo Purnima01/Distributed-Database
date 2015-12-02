@@ -21,6 +21,16 @@ public class Site {
         lockMap = new HashMap<String, List<Lock>>();
     }
 
+    public boolean allEvenVariablesWrittenToAfterRecovery() {
+        Set<String> allVariablesOnSite = variablesOnSite.keySet();
+        for (String variable : allVariablesOnSite) {
+            if (!variablesOnSite.get(variable)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public SiteStatus getSiteStatus() {
         return siteStatus;
     }

@@ -1,3 +1,17 @@
+//write part pending + full testing
+
+//TODO: Check debs and todos
+//Remember to skip 0th site for sites
+//what happens if a site fails - suppose t1 acc. x4 on site1
+//and t2 acc. x4 on site2 and site1 fails, do we kill t1 & t2?
+//what about for write txns?
+
+/*TODO: remove comments that are not needed
+* TODO: mention in javadocs whenever objects are returned from getters and not their copies.
+* TODO: changes propagate to the actual object.
+* TODO: change "variable" in print statements to "data item"
+* TODO: somehow merge sites accessed set and lock info (also has sites accessed as key in Reg txns)..duplicate ds for same infor!
+*/
 
 import java.io.FileNotFoundException;
 import java.util.*;
@@ -180,6 +194,12 @@ public class TransactionManager {
                         break;
 
                     case WRITE:
+                        txnID = cmd.getTransaction();
+                        txn = tm.transactionMap.get(txnID);
+                        varToAccess = cmd.getVar();
+                        int valueToWrite = cmd.getToWriteValue();
+
+                        tm.processWrite(txn, varToAccess, valueToWrite, cmd);
                         //for recovered sites, some form of check if the variables are all written to so it can be
                         //active again instaad of recovered
                         break;
@@ -300,7 +320,7 @@ public class TransactionManager {
                     currentTxn.abort(sites, reasonForAbort);
                 } else {
                     //currentTxn is older than owner of lock; so it must wait for owner to complete
-                    pendingCommands.add(cmd);
+                    putCommandInPendingListIfAbsent(cmd);
                 }
                 return true;
             }
@@ -353,6 +373,17 @@ public class TransactionManager {
         addReadLock(varToAccess, serveSite, currentTxn);
     }
 
+    private void printVariableValueReadByROTransaction(int index,
+                                                       String varToAccess,
+                                                       List<ValueTimeStamp> valueHistoryForVariable,
+                                                       Transaction txn, Site serveSite) {
+
+        int valueOfVariableReadByROTxn = valueHistoryForVariable.get(index).getValue();
+        System.out.println("Value of " + varToAccess + " read by "
+                + txn.getId() + " is " + valueOfVariableReadByROTxn
+                + " at site " + serveSite.getId());
+    }
+
     private void processROtxn(Transaction txn, String varToAccess, Command cmd) {
         if (!canRunTxn(txn)) {
             return;
@@ -387,14 +418,78 @@ public class TransactionManager {
         }
     }
 
-    private void printVariableValueReadByROTransaction(int index,
-            String varToAccess,
-            List<ValueTimeStamp> valueHistoryForVariable,
-            Transaction txn, Site serveSite) {
 
-        int valueOfVariableReadByROTxn = valueHistoryForVariable.get(index).getValue();
-        System.out.println("Value of " + varToAccess + " read by "
-                + txn.getId() + " is " + valueOfVariableReadByROTxn
-                + " at site " + serveSite.getId());
+    private void processWrite(Transaction txn, String varToAccess, int valToWrite, Command cmd) {
+        if (!canRunTxn(txn)) {
+            return;
+        }
+
+        if (txn.variablePresentInModifiedVariables(varToAccess)) {
+            txn.writeToLocalValue(varToAccess, valToWrite);
+            return;
+        }
+
+        WriteOperationStatus result = attemptToWrite(varToAccess, txn, cmd);
+        if (result == WriteOperationStatus.ABORTED) {
+            return;
+        } else if (result == WriteOperationStatus.WAIT) {
+            return;
+        } else {
+            executeWrite();
+        }
     }
+
+    private WriteOperationStatus attemptToWrite(
+            String varToAccess, Transaction currentTxn, Command cmd) {
+
+        if (noActiveSite(varToAccess)) {
+            putCommandInPendingListIfAbsent(cmd);
+            return WriteOperationStatus.WAIT;
+        }
+
+        List<Site> sitesWithVar = variableLocationMap.get(varToAccess);
+        for (Site site : sitesWithVar) {
+            if (site.getSiteStatus() == SiteStatus.FAILED) {
+                continue;
+            }
+            List<Lock> locksOnVar = site.getLocksForVariable(varToAccess);
+            //no existing lock on variable on this site
+            if (locksOnVar == null) {
+                continue;
+            }
+
+            for (Lock lock : locksOnVar) {
+                String otherTxnId = lock.getTxnIdHoldingLock();
+                Transaction otherTxn = transactionMap.get(otherTxnId);
+                //existing read lock on variable and site by the currentTxn - ok
+                if (otherTxn.getId().equals(currentTxn.getId())) {
+                    continue;
+                }
+                if (currentTxn.isYoungerThan(otherTxn)) {
+                    String reasonForAbort = ("Transaction " + currentTxn.getId() +
+                            " was aborted (wait-die) because it was waiting on a lock" +
+                            " held by Transaction " + otherTxn.getId());
+                    currentTxn.abort(sites, reasonForAbort);
+                    return WriteOperationStatus.ABORTED;
+                } else {
+                    //currentTxn is older than otherTxn holding lock, must wait
+                    putCommandInPendingListIfAbsent(cmd);
+                    return WriteOperationStatus.WAIT;
+                }
+            }
+        }
+        return WriteOperationStatus.WRITE;
+    }
+
+    private boolean noActiveSite(String variable) {
+        List<Site> sites = variableLocationMap.get(variable);
+        for (Site site : sites) {
+            if (site.getSiteStatus() != SiteStatus.FAILED) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+
 }
