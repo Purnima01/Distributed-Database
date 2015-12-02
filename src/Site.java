@@ -47,6 +47,11 @@ public class Site {
         return variablesOnSite;
     }
 
+    /**For recovered sites*/
+    public void alterReadPermissionForVariable(String variable) {
+        variablesOnSite.put(variable, true);
+    }
+
     public void addVariableToSite(String variable) {
         variablesOnSite.put(variable, true);
     }

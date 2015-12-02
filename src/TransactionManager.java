@@ -1,18 +1,3 @@
-//write part pending + full testing
-
-//TODO: Check debs and todos
-//Remember to skip 0th site for sites
-//what happens if a site fails - suppose t1 acc. x4 on site1
-//and t2 acc. x4 on site2 and site1 fails, do we kill t1 & t2?
-//what about for write txns?
-
-/*TODO: remove comments that are not needed
-* TODO: clean up addREadLock addWriteLock commin part
-* TODO: mention in javadocs whenever objects are returned from getters and not their copies.
-* TODO: changes propagate to the actual object.
-* TODO: change "variable" in print statements to "data item"
-* TODO: somehow merge sites accessed set and lock info (also has sites accessed as key in Reg txns)..duplicate ds for same infor!
-*/
 
 import java.io.FileNotFoundException;
 import java.util.*;
@@ -201,8 +186,6 @@ public class TransactionManager {
                         int valueToWrite = cmd.getToWriteValue();
 
                         tm.processWrite(txn, varToAccess, valueToWrite, cmd);
-                        //for recovered sites, some form of check if the variables are all written to so it can be
-                        //active again instaad of recovered
                         break;
                     //deal with pending list in FIFO order
                 }
@@ -210,6 +193,35 @@ public class TransactionManager {
         }
         System.out.println("Number of pending commands = " + tm.pendingCommands.size());
     }
+
+    /**
+     * Call when a write transaction commits - all the variables written to
+     * by the write transaction are now sent to every site that holds the variable.
+     * A value-timestamp entry is created for the variable and is appended
+     * to the corresponding list of value-timestamp history for the variable
+     * in variableMap of the site. This list will not include a failed site as
+     * the transaction would have been aborted if a site it had written to had failed.
+     */
+    public void updateGlobalValueOfVariable(String variableToUpdate, int newValue) {
+        List<ValueTimeStamp> historyForVariable = variableMap.get(variableToUpdate);
+        ValueTimeStamp update = new ValueTimeStamp(newValue, time);
+        historyForVariable.add(update);
+        propagateUpdatedVariableToRelevantSites(variableToUpdate, newValue);
+    }
+
+    private void propagateUpdatedVariableToRelevantSites(String variable, int newValue) {
+        List<Site> sitesWithVariable = variableLocationMap.get(variable);
+        for (Site site : sitesWithVariable) {
+            //site.updateValueOfVariable(variable, newValue);
+            if (site.getSiteStatus() == SiteStatus.RECOVERED) {
+                site.alterReadPermissionForVariable(variable);
+            }
+            if (site.allEvenVariablesWrittenToAfterRecovery()) {
+                site.setSiteStatus(SiteStatus.ACTIVE);
+            }
+        }
+    }
+
 
     private void processRecovery(int siteNumberToRecover) {
         Site siteToRecover = sites[siteNumberToRecover];

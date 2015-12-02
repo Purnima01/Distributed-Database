@@ -31,10 +31,6 @@ public class Transaction {
         }
     }
 
-    public void setStatus(TransactionStatus newStatus) {
-        status = newStatus;
-    }
-
     public TransactionStatus getStatus() {
         return status;
     }
@@ -71,13 +67,16 @@ public class Transaction {
     public void abort(Site[] sites, String reasonForAbort) {
         status = TransactionStatus.ABORTED;
 
-        for (Integer accessedSiteId : sitesAccessed) {
-            Site siteAccessed = sites[accessedSiteId];
-            siteAccessed.removeTransaction(id);
-        }
+        removeSelfFromAccessedSites(sites);
 
         System.out.println("Transaction " + id + " has been aborted because " + reasonForAbort);
 
+        releaseAllLocksHeld(sites);
+
+        reclaimSpace();
+    }
+
+    private void releaseAllLocksHeld(Site[] sites) {
         if (type == TransactionType.REGULAR) {
             Set<Integer> sitesAccessed = locksHeldByTxn.keySet();
             for (Integer site : sitesAccessed) {
@@ -87,7 +86,13 @@ public class Transaction {
                 }
             }
         }
-        reclaimSpace();
+    }
+
+    private void removeSelfFromAccessedSites(Site[] sites) {
+        for (Integer accessedSiteId : sitesAccessed) {
+            Site siteAccessed = sites[accessedSiteId];
+            siteAccessed.removeTransaction(id);
+        }
     }
 
     private void reclaimSpace() {
@@ -97,15 +102,7 @@ public class Transaction {
     }
 
     public void commit() {
-        /*propagate my modified variables to tm -
-          all my writes should be visible now
-          and flush my modified variables*/
-        //remove myself from every site's transactionsOnSite that I accessed
-        //release all locks(unmodifiedVariablesAccessed + modifiedVariables)
-        //on variables held by transaction
-        //set my status to committed
-        //set status as committed in tm for me
-        //print that I am committed
+
     }
 
     public boolean variablePresentInModifiedVariables(String variable) {
