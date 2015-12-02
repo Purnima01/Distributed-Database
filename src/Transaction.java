@@ -79,9 +79,21 @@ public class Transaction {
         System.out.println("Transaction " + id + " has been aborted because " + reasonForAbort);
 
         if (type == TransactionType.REGULAR) {
-            //if non-RO release all locks (unmodifiedVariablesAccessed + modifiedVariables) on variables held by transaction on sites
+            Set<Integer> sitesAccessed = locksHeldByTxn.keySet();
+            for (Integer site : sitesAccessed) {
+                List<Lock> lockList = locksHeldByTxn.get(site);
+                for (Lock lock : lockList) {
+                    lock.release(sites);
+                }
+            }
         }
-        //flush my modified variables to claim space - set to null
+        reclaimSpace();
+    }
+
+    private void reclaimSpace() {
+        modifiedVariables = null;
+        locksHeldByTxn = null;
+        sitesAccessed = null;
     }
 
     public void commit() {
@@ -129,20 +141,28 @@ public class Transaction {
 
     public void addLockInformationToTransaction(Lock lock) {
         int siteOnWhichLockIsHeld = lock.getSiteIdOnWhichLockExists();
+        List<Lock> locksOnSite;
 
         if (locksHeldByTxn.containsKey(siteOnWhichLockIsHeld)) {
-            List<Lock> locksOnSite = locksHeldByTxn.get(siteOnWhichLockIsHeld);
-            locksOnSite.add(lock);
-            locksHeldByTxn.put(siteOnWhichLockIsHeld, locksOnSite);
+            locksOnSite = locksHeldByTxn.get(siteOnWhichLockIsHeld);
         } else {
-            List<Lock> locksOnSite = new ArrayList<Lock>();
-            locksOnSite.add(lock);
-            locksHeldByTxn.put(siteOnWhichLockIsHeld, locksOnSite);
+            locksOnSite = new ArrayList<Lock>();
         }
+        locksOnSite.add(lock);
+        locksHeldByTxn.put(siteOnWhichLockIsHeld, locksOnSite);
     }
 
-    public boolean alreadyHasLockOnSite(int siteId) {
-        return locksHeldByTxn.containsKey(siteId);
+    public boolean alreadyHasLockOnSiteForVariable(int siteId, String var) {
+        if (!locksHeldByTxn.containsKey(siteId)) {
+            return false;
+        }
+        List<Lock> locks = locksHeldByTxn.get(siteId);
+        for (Lock lock : locks) {
+            if (lock.getVariableLocked().equals(var)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**Reads value from local storage if exists*/

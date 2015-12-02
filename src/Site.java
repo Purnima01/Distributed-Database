@@ -10,9 +10,8 @@ public class Site {
     private Map<String, Boolean> variablesOnSite;
     //Transactions that accessed any data item on this site
     private Set<String> transactionsOnSite;
-    //string corresponds to variable that is locked on site
+    //String corresponds to variable that is locked on site
     private Map<String, List<Lock>> lockMap;
-
 
     public Site(int siteID) {
         siteStatus = SiteStatus.ACTIVE;
@@ -21,8 +20,6 @@ public class Site {
         transactionsOnSite = new HashSet<String>();
         lockMap = new HashMap<String, List<Lock>>();
     }
-
-    //some ds for variable, txn holding lock on var, lock details
 
     public SiteStatus getSiteStatus() {
         return siteStatus;
@@ -71,6 +68,7 @@ public class Site {
     public void addToLockMap(Lock newReadLock) {
         String variable = newReadLock.getVariableLocked();
         List<Lock> locksForVariable;
+
         if (!lockMap.containsKey(variable)) {
             locksForVariable = new ArrayList<Lock>();
         } else {
@@ -78,5 +76,28 @@ public class Site {
         }
         locksForVariable.add(newReadLock);
         lockMap.put(variable, locksForVariable);
+    }
+
+    /**
+     * Get list of all locks on the variable.
+     * Desired lock will be on this list.
+     * Remove desired lock from list.
+     *
+     * This operation is O(N) per call,
+     * where N = number of locks on
+     * to this data item by all non-RO
+     * transactions accessing this site.
+     */
+    public void removeLockEntry(Lock lockToRemove) {
+        String variableCorrespondingToLock = lockToRemove.getVariableLocked();
+        List<Lock> getLockList = lockMap.get(variableCorrespondingToLock);
+        getLockList.remove(lockToRemove);
+    }
+    //deb:
+    public void printLock(String v) {
+        List<Lock> ll = lockMap.get(v);
+        for (Lock l : ll) {
+            System.out.println("Lock held by trans " + l.getTxnIdHoldingLock());
+        }
     }
 }

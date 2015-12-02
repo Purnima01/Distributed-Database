@@ -1,15 +1,3 @@
-//TODO: Check debs and todos
-//Remember to skip 0th site for sites
-//what happens if a site fails - suppose t1 acc. x4 on site1
-//and t2 acc. x4 on site2 and site1 fails, do we kill t1 & t2?
-//what about for write txns?
-
-/*TODO: remove comments that are not needed
-* TODO: mention in javadocs whenever objects are returned from getters and not their copies.
-* TODO: changes propagate to the actual object.
-* TODO: change "variable" in print statements to "data item"
-* TODO: somehow merge sites accessed set and lock info (also has sites accessed as key in Reg txns)..duplicate ds for same infor!
-*/
 
 import java.io.FileNotFoundException;
 import java.util.*;
@@ -347,7 +335,9 @@ public class TransactionManager {
             return;
         }
 
-        if (txn.alreadyHasLockOnSite(serveSite.getId())) {
+        if (txn.alreadyHasLockOnSiteForVariable(serveSite.getId(), varToAccess)) {
+            System.out.println("Transaction " + txn.getId() + " already has a lock" +
+                    " on variable " + varToAccess + " at site " + serveSite.getId());
             printVariableValueRead(varToAccess, txn, serveSite);
             return;
         }
