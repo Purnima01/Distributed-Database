@@ -41,18 +41,6 @@ public class Lock {
         return variableLocked;
     }
 
-    public void setTypeOfLock(LockType typeOfLock) {
-        this.typeOfLock = typeOfLock;
-    }
-
-    /**
-     * change existing read lock to write lock for variable, site and txn
-     * when txn wants to write to a var on site it previously read.
-     */
-    public void updateLockChangeLockType(Lock lock, LockType changedType) {
-        //fill during writes
-    }
-
     /**Transaction calls this on abort/commit*/
     public void release(Site[] sites) {
         int siteId = getSiteIdOnWhichLockExists();

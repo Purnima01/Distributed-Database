@@ -174,5 +174,9 @@ public class Transaction {
     public void writeToLocalValue(String varToAccess, int valToWrite) {
         modifiedVariables.put(varToAccess, valToWrite);
     }
+
+    public void addToModifiedVariables(String varToAccess, int valToWrite) {
+        modifiedVariables.put(varToAccess, valToWrite);
+    }
 }
 

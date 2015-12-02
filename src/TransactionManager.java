@@ -7,6 +7,7 @@
 //what about for write txns?
 
 /*TODO: remove comments that are not needed
+* TODO: clean up addREadLock addWriteLock commin part
 * TODO: mention in javadocs whenever objects are returned from getters and not their copies.
 * TODO: changes propagate to the actual object.
 * TODO: change "variable" in print statements to "data item"
@@ -338,6 +339,14 @@ public class TransactionManager {
         printVariableValueRead(varToAccess, currentTxn, serveSite);
     }
 
+    private void addLock(String varToAccess, Site site, Transaction txn, LockType lockType) {
+        Lock newLock = new Lock(txn.getId(), site.getId(), varToAccess, lockType);
+        site.addToLockMap(newLock);
+
+        txn.addLockInformationToTransaction(newLock);
+        updateSiteAndTransactionRecords(site, txn);
+    }
+
     private void processRWtxn(Transaction txn, String varToAccess, Command cmd) {
         if (!canRunTxn(txn)) {
             return;
@@ -396,9 +405,6 @@ public class TransactionManager {
             putCommandInPendingListIfAbsent(cmd);
             return;
         } else {
-            //site is available - if cmd was in pendinglist, remove it
-            removeCommandFromPendingListIfPresent(cmd);
-
             //in case of site failure
             updateSiteAndTransactionRecords(serveSite, txn);
 
@@ -418,7 +424,6 @@ public class TransactionManager {
         }
     }
 
-
     private void processWrite(Transaction txn, String varToAccess, int valToWrite, Command cmd) {
         if (!canRunTxn(txn)) {
             return;
@@ -428,19 +433,38 @@ public class TransactionManager {
             txn.writeToLocalValue(varToAccess, valToWrite);
             return;
         }
-
-        WriteOperationStatus result = attemptToWrite(varToAccess, txn, cmd);
+        List<Lock> existingReadLocksForTxn = new ArrayList<Lock>();
+        WriteOperationStatus result = attemptToWrite(varToAccess,
+                txn, cmd, existingReadLocksForTxn);
         if (result == WriteOperationStatus.ABORTED) {
             return;
         } else if (result == WriteOperationStatus.WAIT) {
             return;
         } else {
-            executeWrite();
+            executeWrite(varToAccess, valToWrite, existingReadLocksForTxn, txn);
+        }
+    }
+
+    private void executeWrite(String varToAccess, int valToWrite,
+            List<Lock> existingReadLocksForTxn, Transaction txn) {
+        List<Site> sitesWithVariable = variableLocationMap.get(varToAccess);
+        for (Site site : sitesWithVariable) {
+            if (site.getSiteStatus() == SiteStatus.FAILED) {
+                continue;
+            }
+            //add write lock on every active site that has variable
+            addLock(varToAccess, site, txn, LockType.WRITELOCK);
+            txn.addToModifiedVariables(varToAccess, valToWrite);
+            //remove all read locks held by this txn on this variable at any site (from prv step)
+            for (Lock lock : existingReadLocksForTxn) {
+                lock.release(sites);
+            }
         }
     }
 
     private WriteOperationStatus attemptToWrite(
-            String varToAccess, Transaction currentTxn, Command cmd) {
+            String varToAccess, Transaction currentTxn, Command cmd,
+            List<Lock> existingReadLocks) {
 
         if (noActiveSite(varToAccess)) {
             putCommandInPendingListIfAbsent(cmd);
@@ -461,8 +485,12 @@ public class TransactionManager {
             for (Lock lock : locksOnVar) {
                 String otherTxnId = lock.getTxnIdHoldingLock();
                 Transaction otherTxn = transactionMap.get(otherTxnId);
-                //existing read lock on variable and site by the currentTxn - ok
+                /*
+                  existing read lock on variable and site by the currentTxn - ok
+                  but needs to be removed after acquiring write-locks
+                 */
                 if (otherTxn.getId().equals(currentTxn.getId())) {
+                    existingReadLocks.add(lock);
                     continue;
                 }
                 if (currentTxn.isYoungerThan(otherTxn)) {
@@ -472,7 +500,14 @@ public class TransactionManager {
                     currentTxn.abort(sites, reasonForAbort);
                     return WriteOperationStatus.ABORTED;
                 } else {
-                    //currentTxn is older than otherTxn holding lock, must wait
+                    /*
+                    currentTxn is older than otherTxn holding lock, must wait.
+                    Note: this cmd is added to pendingList. On a later site, this
+                    txn might abort as it might encounter an older txn with lock on
+                    variable. Then, it still remains in pendingList. However, this
+                    is ok, as when we process pendingList cmds, this transaction will
+                    be aborted and that command for the txn will be ignored.
+                     */
                     putCommandInPendingListIfAbsent(cmd);
                     return WriteOperationStatus.WAIT;
                 }
