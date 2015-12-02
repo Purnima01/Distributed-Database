@@ -108,29 +108,6 @@ public class Transaction {
         //print that I am committed
     }
 
-    public void waitTxn(){}
-
-    /**
-     * TM calls this when a transaction wants to write
-     * to a variable and variable is not already in
-     * modifiedVariables.
-     * Adds a variable to this modifiedVariables iff:
-     * 1. Transaction wants to write to the variable
-     * 2. Transaction SUCCESSFULLY obtained the lock
-     * on this variable. Does not add if the transaction
-     * is currently waiting on this variable.
-     *
-     * All reads/writes for this txn must first check for
-     * variables in modifiedVariables.
-     *
-     * @param variable variable to be added.
-     * @param currentValue the value of variable in permanent
-     * storage on the TM.
-     */
-    public void addVariableToWriteVariables(String variable, int currentValue) {
-        modifiedVariables.put(variable, currentValue);
-    }
-
     public boolean variablePresentInModifiedVariables(String variable) {
         return (modifiedVariables.containsKey(variable));
     }
@@ -172,9 +149,26 @@ public class Transaction {
     }
 
     public void writeToLocalValue(String varToAccess, int valToWrite) {
-        modifiedVariables.put(varToAccess, valToWrite);
+        addToModifiedVariables(varToAccess, valToWrite);
     }
 
+    /**
+     * TM calls this when a transaction wants to write
+     * to a variable and variable is not already in
+     * modifiedVariables.
+     * Adds a variable to this modifiedVariables iff:
+     * 1. Transaction wants to write to the variable
+     * 2. Transaction SUCCESSFULLY obtained the lock
+     * on this variable. Does not add if the transaction
+     * is currently waiting on this variable.
+     *
+     * All reads/writes for this txn must first check for
+     * variables in modifiedVariables.
+     *
+     * @param varToAccess variable to be added.
+     * @param valToWrite the value of variable in permanent
+     * storage on the TM.
+     */
     public void addToModifiedVariables(String varToAccess, int valToWrite) {
         modifiedVariables.put(varToAccess, valToWrite);
     }
