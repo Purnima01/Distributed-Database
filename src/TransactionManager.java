@@ -11,7 +11,6 @@
 * TODO: mention in javadocs whenever objects are returned from getters and not their copies.
 * TODO: changes propagate to the actual object.
 * TODO: change "variable" in print statements to "data item"
-* TODO: shift variableMap to each site...and remove from tm
 * TODO: somehow merge sites accessed set and lock info (also has sites accessed as key in Reg txns)..duplicate ds for same infor!
 */
 
@@ -223,7 +222,7 @@ public class TransactionManager {
      * by the write transaction are now sent to every site that holds the variable.
      * A value-timestamp entry is created for the variable and is appended
      * to the corresponding list of value-timestamp history for the variable
-     * in variableMap of the site. This list will not include a failed site as
+     * in variableValues of the site. This list will not include a failed site as
      * the transaction would have been aborted if a site it had written to had failed.
      */
     public void updateGlobalValueOfVariable(String variableToUpdate, int newValue) {
@@ -563,27 +562,4 @@ public class TransactionManager {
         }
         return true;
     }
-
-    //deb:everything from here except last brace; USED TO DISPLAY VALUES IN TM - DEBUG ONLY
-    /*private void printValuesAllVariables() {
-        Set<String> allVars = variableMap.keySet();
-        Set<String> orderedVars = new TreeSet<String>(new MyComp());
-        orderedVars.addAll(allVars);
-        for (String var : orderedVars) {
-            List<ValueTimeStamp> history = variableMap.get(var);
-            ValueTimeStamp latestValTs = history.get(history.size()-1);
-            int val = latestValTs.getValue();
-            System.out.println("Variable " + var + " has value: " + val);
-        }
-    }
-
-    private class MyComp implements Comparator<String> {
-        public int compare(String s1, String s2) {
-            String s1num = s1.substring(1);
-            String s2num = s2.substring(1);
-            int num1 = Integer.parseInt(s1num);
-            int num2 = Integer.parseInt(s2num);
-            return (num1 < num2 ? -1 : 1);
-        }
-    }*/
 }
