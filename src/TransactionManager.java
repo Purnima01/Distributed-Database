@@ -167,12 +167,6 @@ public class TransactionManager {
                         tm.transactionMap.put(txnID, txn);
                         break;
 
-                    case END:
-                        txnID = cmd.getTransaction();
-                        Transaction txnAboutToCommit = tm.transactionMap.get(txnID);
-                        tm.signalCommitAndReceiveChanges(txnAboutToCommit);
-                        break;
-
                     case READ:
                         txnID = cmd.getTransaction();
                         txn = tm.transactionMap.get(txnID);
@@ -185,6 +179,15 @@ public class TransactionManager {
                         }
                         break;
 
+                    case WRITE:
+                        txnID = cmd.getTransaction();
+                        txn = tm.transactionMap.get(txnID);
+                        varToAccess = cmd.getVar();
+                        int valueToWrite = cmd.getToWriteValue();
+
+                        tm.processWrite(txn, varToAccess, valueToWrite, cmd);
+                        break;
+
                     case RECOVER:
                         int siteNumberToRecover = cmd.getSiteAffected();
                         tm.processRecovery(siteNumberToRecover);
@@ -195,13 +198,10 @@ public class TransactionManager {
                         tm.processFail(siteNumberToFail);
                         break;
 
-                    case WRITE:
+                    case END:
                         txnID = cmd.getTransaction();
-                        txn = tm.transactionMap.get(txnID);
-                        varToAccess = cmd.getVar();
-                        int valueToWrite = cmd.getToWriteValue();
-
-                        tm.processWrite(txn, varToAccess, valueToWrite, cmd);
+                        Transaction txnAboutToCommit = tm.transactionMap.get(txnID);
+                        tm.signalCommitAndReceiveChanges(txnAboutToCommit);
                         break;
                     //deal with pending list in FIFO order
                 }
