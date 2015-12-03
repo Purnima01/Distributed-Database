@@ -1,4 +1,3 @@
-
 import java.io.FileNotFoundException;
 import java.util.*;
 
@@ -489,6 +488,8 @@ public class TransactionManager {
             while (index < valueHistoryForVariable.size()) {
                 if (valueHistoryForVariable.get(index).getTime() < startTimeTxn) {
                     index ++;
+                } else {
+                    break;
                 }
             }
             index --;
