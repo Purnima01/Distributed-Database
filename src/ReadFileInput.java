@@ -105,7 +105,18 @@ public class ReadFileInput {
                     break;
 
                 case 'd':
-                    command = new Command(Operation.DUMP);
+                    if (cmd.length() == 6) {
+                        command = new Command(Operation.DUMP, DumpType.NONE, 0);
+                    } else if (cmd.contains("x")) {
+                        var = cmd.substring(6, cmd.length() - 1);
+                        int varNum = Integer.parseInt(var);
+                        command = new Command(Operation.DUMP, DumpType.VARIABLE, varNum);
+                    } else {
+                        String site = cmd.substring(5, cmd.length() - 1);
+                        int siteNum = Integer.parseInt(site);
+                        command = new Command(Operation.DUMP, DumpType.SITE, siteNum);
+                    }
+
                     commandsOnLine.add(command);
                     break;
             }

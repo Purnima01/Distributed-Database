@@ -130,4 +130,30 @@ public class Site {
             System.out.println("Lock held by trans " + l.getTxnIdHoldingLock());
         }
     }
+
+    public void printSpecificVariableValue(String var) {
+        List<ValueTimeStamp> history = variableValues.get(var);
+        ValueTimeStamp latestValTs = history.get(history.size() - 1);
+        int val = latestValTs.getValue();
+        System.out.println("Variable " + var + " has value: " + val + " on site " + getId());
+    }
+
+    public void printVariableValuesOnSite() {
+        Set<String> allVars = variableValues.keySet();
+        Set<String> orderedVars = new TreeSet<String>(new MyComp());
+        orderedVars.addAll(allVars);
+        for (String var : orderedVars) {
+            printSpecificVariableValue(var);
+        }
+    }
+
+    private class MyComp implements Comparator<String> {
+        public int compare(String s1, String s2) {
+            String s1num = s1.substring(1);
+            String s2num = s2.substring(1);
+            int num1 = Integer.parseInt(s1num);
+            int num2 = Integer.parseInt(s2num);
+            return (num1 < num2 ? -1 : 1);
+        }
+    }
 }

@@ -1,18 +1,3 @@
-//write part pending + full testing
-
-//TODO: Check debs and todos
-//Remember to skip 0th site for sites
-//what happens if a site fails - suppose t1 acc. x4 on site1
-//and t2 acc. x4 on site2 and site1 fails, do we kill t1 & t2?
-//what about for write txns?
-
-/*TODO: remove comments that are not needed
-* TODO: clean up addREadLock addWriteLock commin part
-* TODO: mention in javadocs whenever objects are returned from getters and not their copies.
-* TODO: changes propagate to the actual object.
-* TODO: change "variable" in print statements to "data item"
-* TODO: somehow merge sites accessed set and lock info (also has sites accessed as key in Reg txns)..duplicate ds for same infor!
-*/
 
 import java.io.FileNotFoundException;
 import java.util.*;
@@ -34,13 +19,16 @@ public class TransactionManager {
     //10 sites, ignoring site[0]
     private Site[] sites;
 
-    private ArrayList<Command> pendingCommands;
+    private List<Command> pendingCommands;
+
+    private List<Command> commandsToRemoveFromPendingListForThisRound;
 
     public TransactionManager() {
         variableLocationMap = new HashMap<String, List<Site>>();
         transactionMap = new HashMap<String, Transaction>();
         sites = new Site[SITES];
         pendingCommands = new ArrayList<Command>();
+        commandsToRemoveFromPendingListForThisRound = new ArrayList<Command>();
     }
 
     private void initialize() {
@@ -121,7 +109,7 @@ public class TransactionManager {
     private void removeCommandFromPendingListIfPresent(Command cmd) {
         if (cmd.isInPendingList()) {
             cmd.setInPendingList(false);
-            pendingCommands.remove(cmd);
+            commandsToRemoveFromPendingListForThisRound.add(cmd);
         }
     }
 
@@ -140,66 +128,118 @@ public class TransactionManager {
             tm.incrementTime();
             List<Command> cmdsForLine = rf.getLineAsCommands();
 
-            /*todo: for each command, do corresponding task
-            once all the commands in line have been processed, check if any pending txns can be processed now*/
             for (Command cmd : cmdsForLine) {
-                switch (cmd.getOperation()) {
-
-                    case BEGIN:
-                        String txnID = cmd.getTransaction();
-                        Transaction txn = new Transaction(tm.getTime(),
-                                txnID, TransactionType.REGULAR);
-                        tm.transactionMap.put(txnID, txn);
-                        break;
-
-                    case BEGINRO:
-                        txnID = cmd.getTransaction();
-                        txn = new Transaction(tm.getTime(),
-                                txnID, TransactionType.READONLY);
-                        tm.transactionMap.put(txnID, txn);
-                        break;
-
-                    case READ:
-                        txnID = cmd.getTransaction();
-                        txn = tm.transactionMap.get(txnID);
-                        String varToAccess = cmd.getVar();
-
-                        if (txn.getType() == TransactionType.READONLY) {
-                            tm.processROtxn(txn, varToAccess, cmd);
-                        } else {
-                            tm.processRWtxn(txn, varToAccess, cmd);
-                        }
-                        break;
-
-                    case WRITE:
-                        txnID = cmd.getTransaction();
-                        txn = tm.transactionMap.get(txnID);
-                        varToAccess = cmd.getVar();
-                        int valueToWrite = cmd.getToWriteValue();
-
-                        tm.processWrite(txn, varToAccess, valueToWrite, cmd);
-                        break;
-
-                    case RECOVER:
-                        int siteNumberToRecover = cmd.getSiteAffected();
-                        tm.processRecovery(siteNumberToRecover);
-                        break;
-
-                    case FAIL:
-                        int siteNumberToFail = cmd.getSiteAffected();
-                        tm.processFail(siteNumberToFail);
-                        break;
-
-                    case END:
-                        txnID = cmd.getTransaction();
-                        Transaction txnAboutToCommit = tm.transactionMap.get(txnID);
-                        tm.signalCommitAndReceiveChanges(txnAboutToCommit);
-                        break;
-                    //deal with pending list in FIFO order
-                }
+                tm.executeCommand(cmd);
             }
+            //Traverse pending list to see if any command can be processed after executing recent commands
+            tm.executeCommandsInPendingList();
         }
         System.out.println("Number of pending commands = " + tm.pendingCommands.size());
+    }
+
+    private void executeCommandsInPendingList() {
+        commandsToRemoveFromPendingListForThisRound.clear();
+        for (Command pending : pendingCommands) {
+            executeCommand(pending);
+        }
+        for (Command command : commandsToRemoveFromPendingListForThisRound) {
+            pendingCommands.remove(command);
+        }
+    }
+
+    private void executeCommand(Command cmd) {
+        switch (cmd.getOperation()) {
+
+            case BEGIN:
+                String txnID = cmd.getTransaction();
+                Transaction txn = new Transaction(getTime(),
+                        txnID, TransactionType.REGULAR);
+                transactionMap.put(txnID, txn);
+                break;
+
+            case BEGINRO:
+                txnID = cmd.getTransaction();
+                txn = new Transaction(getTime(),
+                        txnID, TransactionType.READONLY);
+                transactionMap.put(txnID, txn);
+                break;
+
+            case READ:
+                txnID = cmd.getTransaction();
+                txn = transactionMap.get(txnID);
+                String varToAccess = cmd.getVar();
+
+                if (txn.getType() == TransactionType.READONLY) {
+                    processROtxn(txn, varToAccess, cmd);
+                } else {
+                    processRWtxn(txn, varToAccess, cmd);
+                }
+                break;
+
+            case WRITE:
+                txnID = cmd.getTransaction();
+                txn = transactionMap.get(txnID);
+                varToAccess = cmd.getVar();
+                int valueToWrite = cmd.getToWriteValue();
+
+                processWrite(txn, varToAccess, valueToWrite, cmd);
+                break;
+
+            case RECOVER:
+                int siteNumberToRecover = cmd.getSiteAffected();
+                processRecovery(siteNumberToRecover);
+                break;
+
+            case FAIL:
+                int siteNumberToFail = cmd.getSiteAffected();
+                processFail(siteNumberToFail);
+                break;
+
+            case END:
+                txnID = cmd.getTransaction();
+                Transaction txnAboutToCommit = transactionMap.get(txnID);
+                signalCommitAndReceiveChanges(txnAboutToCommit);
+                break;
+
+            case DUMP:
+                if (cmd.getDumpType() == DumpType.NONE) {
+                    dumpAllSites();
+                } else if (cmd.getDumpType() == DumpType.SITE) {
+                    int siteToDump = cmd.getDumpValue();
+                    dumpSpecificSite(siteToDump);
+                } else {
+                    int varToDump = cmd.getDumpValue();
+                    dumpVariable(varToDump);
+                }
+                break;
+        }
+    }
+
+    private void dumpVariable(int varToDump) {
+        String reconstructVariable = "x" + String.valueOf(varToDump);
+        List<Site> sitesWithVar = variableLocationMap.get(reconstructVariable);
+        for (Site site : sitesWithVar) {
+            site.printSpecificVariableValue(reconstructVariable);
+        }
+    }
+
+    private void dumpAllSites() {
+        for (Site site : sites) {
+            if (site != null) {
+                dumpSiteHelp(site);
+            }
+        }
+    }
+
+    private void dumpSpecificSite(int siteId) {
+        Site site = sites[siteId];
+        dumpSiteHelp(site);
+    }
+
+    /**Prints all variable values on the site*/
+    private void dumpSiteHelp(Site site) {
+        System.out.println("Variables on site " + site.getId());
+        site.printVariableValuesOnSite();
     }
 
     /**call this on encountering end cmd*/
@@ -244,7 +284,6 @@ public class TransactionManager {
             }
         }
     }
-
 
     private void processRecovery(int siteNumberToRecover) {
         Site siteToRecover = sites[siteNumberToRecover];
@@ -416,6 +455,7 @@ public class TransactionManager {
 
         //no write lock, safe to add a read lock to the var on site
         addReadLock(varToAccess, serveSite, currentTxn);
+        removeCommandFromPendingListIfPresent(cmd);
     }
 
     private void printVariableValueReadByROTransaction(int index,
@@ -457,6 +497,8 @@ public class TransactionManager {
 
             printVariableValueReadByROTransaction(index, varToAccess,
                     valueHistoryForVariable, txn, serveSite);
+
+            removeCommandFromPendingListIfPresent(cmd);
         }
     }
 
@@ -478,6 +520,7 @@ public class TransactionManager {
             return;
         } else {
             executeWrite(varToAccess, valToWrite, existingReadLocksForTxn, txn);
+            removeCommandFromPendingListIfPresent(cmd);
         }
     }
 

@@ -13,6 +13,8 @@ public class Command {
     //for fail/recover:
     private int siteAffected;
     private boolean inPendingList = false;
+    private DumpType dumpType;
+    private int dumpValue;
 
     /**
      * use this for fail/recover cmds
@@ -42,9 +44,14 @@ public class Command {
 
     /**
      * Use this for dump cmds
+     * @param op dump
+     * @param dumpType dump specific site, all sites or specific variable at all sites
+     * @param dumpValue which dump site/variable to dump
      */
-    public Command(Operation op) {
+    public Command(Operation op, DumpType dumpType, int dumpValue) {
         operation = op;
+        this.dumpType = dumpType;
+        this.dumpValue = dumpValue;
     }
 
     public boolean isInPendingList() {
@@ -75,6 +82,13 @@ public class Command {
         return toWriteValue;
     }
 
+    public DumpType getDumpType() {
+        return dumpType;
+    }
+
+    public int getDumpValue() {
+        return dumpValue;
+    }
     /**
      * Use this for write commands. Eg: W(T1, x3, 10);
      * @param value: value to be written. In the above eg., 10.
