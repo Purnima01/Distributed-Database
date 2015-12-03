@@ -69,7 +69,7 @@ public class Transaction {
 
         removeSelfFromAccessedSites(sites);
 
-        System.out.println("Transaction " + id + " has been aborted because " + reasonForAbort);
+        System.out.println(reasonForAbort);
 
         releaseAllLocksHeld(sites);
 
@@ -110,7 +110,7 @@ public class Transaction {
         removeSelfFromAccessedSites(sites);
         releaseAllLocksHeld(sites);
         status = TransactionStatus.COMMITTED;
-        System.out.println("Transaction " + id + " has committed.");
+        System.out.println("Transaction " + id + " has committed");
         return modifiedVariables;
     }
 

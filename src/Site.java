@@ -135,7 +135,7 @@ public class Site {
         List<ValueTimeStamp> history = variableValues.get(var);
         ValueTimeStamp latestValTs = history.get(history.size() - 1);
         int val = latestValTs.getValue();
-        System.out.println("Variable " + var + " has value: " + val + " on site " + getId());
+        System.out.println("Variable " + var + " has value: " + val + " at site " + getId());
     }
 
     public void printVariableValuesOnSite() {

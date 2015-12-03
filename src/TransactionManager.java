@@ -244,6 +244,9 @@ public class TransactionManager {
 
     /**call this on encountering end cmd*/
     public void signalCommitAndReceiveChanges(Transaction txn) {
+        if (!canRunTxn(txn)) {
+            return;
+        }
         Map<String, Integer> modifiedVariables = txn.commitAndPushChanges(sites);
         //for each changed variable, propagate change to all sites
         Set<String> variablesChanged = modifiedVariables.keySet();
@@ -365,7 +368,7 @@ public class TransactionManager {
                     !site.canReadVariable(varToAccess)) {
                 System.out.println("Transaction " + txn.getId() +
                         " cannot read variable " + varToAccess +
-                        " on site " + site.getId() +
+                        " at site " + site.getId() +
                         " because the site was recovered and the" +
                         " replicated data item is yet to be written to.");
                 continue;
