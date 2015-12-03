@@ -215,6 +215,10 @@ public class TransactionManager {
         Map<String, Integer> modifiedVariables = txn.commitAndPushChanges(sites);
         //for each changed variable, propagate change to all sites
         Set<String> variablesChanged = modifiedVariables.keySet();
+        //txn performed no writes
+        if (variablesChanged.size() == 0) {
+            return;
+        }
         for (String variable : variablesChanged) {
             int newValue = modifiedVariables.get(variable);
             updateGlobalValueOfVariable(variable, newValue);

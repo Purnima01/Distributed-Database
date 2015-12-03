@@ -101,7 +101,11 @@ public class Transaction {
         sitesAccessed = null;
     }
 
-    /**Commits and sends any modified variables back to the tm*/
+    /**
+     * Commits and sends any modified variables back to the tm. Warning: sends
+     * the actual object. Any changes made to the object will be reflected in the
+     * actual data structure in the transaction.
+     */
     public Map<String, Integer> commitAndPushChanges(Site[] sites) {
         removeSelfFromAccessedSites(sites);
         releaseAllLocksHeld(sites);
