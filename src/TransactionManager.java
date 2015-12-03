@@ -170,7 +170,7 @@ public class TransactionManager {
                     case END:
                         txnID = cmd.getTransaction();
                         Transaction txnAboutToCommit = tm.transactionMap.get(txnID);
-                        txnAboutToCommit.commit();
+                        tm.signalCommitAndReceiveChanges(txnAboutToCommit);
                         break;
 
                     case READ:
