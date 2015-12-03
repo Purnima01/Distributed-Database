@@ -101,8 +101,13 @@ public class Transaction {
         sitesAccessed = null;
     }
 
-    public void commit() {
-
+    /**Commits and sends any modified variables back to the tm*/
+    public Map<String, Integer> commitAndPushChanges(Site[] sites) {
+        removeSelfFromAccessedSites(sites);
+        releaseAllLocksHeld(sites);
+        status = TransactionStatus.COMMITTED;
+        System.out.println("Transaction " + id + " has committed.");
+        return modifiedVariables;
     }
 
     public boolean variablePresentInModifiedVariables(String variable) {

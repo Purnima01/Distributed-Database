@@ -1,3 +1,19 @@
+//write part pending + full testing
+
+//TODO: Check debs and todos
+//Remember to skip 0th site for sites
+//what happens if a site fails - suppose t1 acc. x4 on site1
+//and t2 acc. x4 on site2 and site1 fails, do we kill t1 & t2?
+//what about for write txns?
+
+/*TODO: remove comments that are not needed
+* TODO: clean up addREadLock addWriteLock commin part
+* TODO: mention in javadocs whenever objects are returned from getters and not their copies.
+* TODO: changes propagate to the actual object.
+* TODO: change "variable" in print statements to "data item"
+* TODO: shift variableMap to each site...and remove from tm
+* TODO: somehow merge sites accessed set and lock info (also has sites accessed as key in Reg txns)..duplicate ds for same infor!
+*/
 
 import java.io.FileNotFoundException;
 import java.util.*;
@@ -192,6 +208,17 @@ public class TransactionManager {
             }
         }
         System.out.println("Number of pending commands = " + tm.pendingCommands.size());
+    }
+
+    /**call this on encountering end cmd*/
+    public void signalCommitAndReceiveChanges(Transaction txn) {
+        Map<String, Integer> modifiedVariables = txn.commitAndPushChanges(sites);
+        //for each changed variable, propagate change to all sites
+        Set<String> variablesChanged = modifiedVariables.keySet();
+        for (String variable : variablesChanged) {
+            int newValue = modifiedVariables.get(variable);
+            updateGlobalValueOfVariable(variable, newValue);
+        }
     }
 
     /**
