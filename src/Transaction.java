@@ -177,6 +177,8 @@ public class Transaction {
      */
     public void addToModifiedVariables(String varToAccess, int valToWrite) {
         modifiedVariables.put(varToAccess, valToWrite);
+        System.out.println("Transaction " + getId() + " wrote " +
+                varToAccess + " = " + valToWrite + " to local storage");
     }
 }
 

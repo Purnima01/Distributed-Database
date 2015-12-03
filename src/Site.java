@@ -8,10 +8,12 @@ public class Site {
     private SiteStatus siteStatus;
     //Variables on site and whether that variable can be read from this site
     private Map<String, Boolean> variablesOnSite;
+    private Map<String, List<ValueTimeStamp>> variableValues;
     //Transactions that accessed any data item on this site
     private Set<String> transactionsOnSite;
     //String corresponds to variable that is locked on site
     private Map<String, List<Lock>> lockMap;
+
 
     public Site(int siteID) {
         siteStatus = SiteStatus.ACTIVE;
@@ -19,6 +21,7 @@ public class Site {
         variablesOnSite = new HashMap<String, Boolean>();
         transactionsOnSite = new HashSet<String>();
         lockMap = new HashMap<String, List<Lock>>();
+        variableValues = new HashMap<String, List<ValueTimeStamp>>();
     }
 
     public boolean allEvenVariablesWrittenToAfterRecovery() {
@@ -52,8 +55,20 @@ public class Site {
         variablesOnSite.put(variable, true);
     }
 
-    public void addVariableToSite(String variable) {
+    public void addVariableToSite(String variable, ValueTimeStamp valTime) {
         variablesOnSite.put(variable, true);
+        List<ValueTimeStamp> values = new ArrayList<ValueTimeStamp>();
+        values.add(valTime);
+        variableValues.put(variable, values);
+    }
+
+    public void updateValueOfVariable(String variable, ValueTimeStamp updatedValueTime) {
+        List<ValueTimeStamp> history = variableValues.get(variable);
+        history.add(updatedValueTime);
+    }
+
+    public List<ValueTimeStamp> getValueHistoryOfVariable(String variable) {
+        return variableValues.get(variable);
     }
 
     public void addTxnToSite(String txnid) {

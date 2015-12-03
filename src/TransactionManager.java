@@ -31,7 +31,6 @@ public class TransactionManager {
     private Map<String, Transaction> transactionMap;
     //Variables and the sites they are present on
     private Map<String, List<Site>> variableLocationMap;
-    private Map<String, List<ValueTimeStamp>> variableMap;
 
     //10 sites, ignoring site[0]
     private Site[] sites;
@@ -40,7 +39,6 @@ public class TransactionManager {
 
     public TransactionManager() {
         variableLocationMap = new HashMap<String, List<Site>>();
-        variableMap = new HashMap<String, List<ValueTimeStamp>>();
         transactionMap = new HashMap<String, Transaction>();
         sites = new Site[SITES];
         pendingCommands = new ArrayList<Command>();
@@ -48,7 +46,6 @@ public class TransactionManager {
 
     private void initialize() {
         initializeSites();
-        initializeVariables();
         distributeVariablesToSites();
     }
 
@@ -58,17 +55,12 @@ public class TransactionManager {
         }
     }
 
-    private void initializeVariables() {
-        for (int i = 1; i <= 20; i ++) {
-            String variable = getVariableName(i);
-            String value = "10" + String.valueOf(i);
+    private ValueTimeStamp initializeVariable(int variable) {
+            String value = "10" + String.valueOf(variable);
             int initVal = Integer.parseInt(value);
             int initTime = 0;
             ValueTimeStamp varVal = new ValueTimeStamp(initVal, initTime);
-            List<ValueTimeStamp> valTimeList = new ArrayList<ValueTimeStamp>();
-            valTimeList.add(varVal);
-            variableMap.put(variable, valTimeList);
-        }
+            return varVal;
     }
 
     /**
@@ -79,6 +71,7 @@ public class TransactionManager {
     private void distributeVariablesToSites() {
         for (int var = 1; var <= 20; var ++) {
             String varName = getVariableName(var);
+            ValueTimeStamp variableValue = initializeVariable(var);
             if (var % 2 == 0) {
                 for (Site site : sites) {
                     //skip 0th site because there is no site there
@@ -86,7 +79,7 @@ public class TransactionManager {
                         continue;
                     }
                     List<Site> locations;
-                    site.addVariableToSite(varName);
+                    site.addVariableToSite(varName, variableValue);
                     if (variableLocationMap.containsKey(varName)) {
                         locations = variableLocationMap.get(varName);
                     } else {
@@ -101,7 +94,7 @@ public class TransactionManager {
                 List<Site> location = new ArrayList<Site>();
                 location.add(siteLocatedAt);
                 variableLocationMap.put(varName, location);
-                siteLocatedAt.addVariableToSite(varName);
+                siteLocatedAt.addVariableToSite(varName, variableValue);
             }
         }
     }
@@ -234,16 +227,16 @@ public class TransactionManager {
      * the transaction would have been aborted if a site it had written to had failed.
      */
     public void updateGlobalValueOfVariable(String variableToUpdate, int newValue) {
-        List<ValueTimeStamp> historyForVariable = variableMap.get(variableToUpdate);
-        ValueTimeStamp update = new ValueTimeStamp(newValue, time);
-        historyForVariable.add(update);
-        propagateUpdatedVariableToRelevantSites(variableToUpdate, newValue);
+        List<Site> sitesWithVariable = variableLocationMap.get(variableToUpdate);
+        propagateUpdatedVariableToRelevantSites(variableToUpdate, newValue, sitesWithVariable);
     }
 
-    private void propagateUpdatedVariableToRelevantSites(String variable, int newValue) {
-        List<Site> sitesWithVariable = variableLocationMap.get(variable);
+    private void propagateUpdatedVariableToRelevantSites(String variable,
+                 int newValue, List<Site> sitesWithVariable) {
+
+        ValueTimeStamp update = new ValueTimeStamp(newValue, time);
         for (Site site : sitesWithVariable) {
-            //site.updateValueOfVariable(variable, newValue);
+            site.updateValueOfVariable(variable, update);
             if (site.getSiteStatus() == SiteStatus.RECOVERED) {
                 site.alterReadPermissionForVariable(variable);
             }
@@ -304,7 +297,8 @@ public class TransactionManager {
     private void printVariableValueRead(String varToAccess,
           Transaction txn, Site serveSite) {
 
-        List<ValueTimeStamp> valueHistoryForVariable = variableMap.get(varToAccess);
+        List<ValueTimeStamp> valueHistoryForVariable =
+                serveSite.getValueHistoryOfVariable(varToAccess);
         int size = valueHistoryForVariable.size();
         int valueOfVariable = valueHistoryForVariable.get(size - 1).getValue();
         System.out.println("Value of " + varToAccess +  " read by "
@@ -452,7 +446,7 @@ public class TransactionManager {
             updateSiteAndTransactionRecords(serveSite, txn);
 
             List<ValueTimeStamp> valueHistoryForVariable =
-                    variableMap.get(varToAccess);
+                    serveSite.getValueHistoryOfVariable(varToAccess);
 
             int index = 0;
             while (index < valueHistoryForVariable.size()) {
@@ -491,13 +485,14 @@ public class TransactionManager {
     private void executeWrite(String varToAccess, int valToWrite,
             List<Lock> existingReadLocksForTxn, Transaction txn) {
         List<Site> sitesWithVariable = variableLocationMap.get(varToAccess);
+        txn.addToModifiedVariables(varToAccess, valToWrite);
+
         for (Site site : sitesWithVariable) {
             if (site.getSiteStatus() == SiteStatus.FAILED) {
                 continue;
             }
             //add write lock on every active site that has variable
             addLock(varToAccess, site, txn, LockType.WRITELOCK);
-            txn.addToModifiedVariables(varToAccess, valToWrite);
             //remove all read locks held by this txn on this variable at any site (from prv step)
             for (Lock lock : existingReadLocksForTxn) {
                 lock.release(sites);
@@ -569,5 +564,26 @@ public class TransactionManager {
         return true;
     }
 
+    //deb:everything from here except last brace; USED TO DISPLAY VALUES IN TM - DEBUG ONLY
+    /*private void printValuesAllVariables() {
+        Set<String> allVars = variableMap.keySet();
+        Set<String> orderedVars = new TreeSet<String>(new MyComp());
+        orderedVars.addAll(allVars);
+        for (String var : orderedVars) {
+            List<ValueTimeStamp> history = variableMap.get(var);
+            ValueTimeStamp latestValTs = history.get(history.size()-1);
+            int val = latestValTs.getValue();
+            System.out.println("Variable " + var + " has value: " + val);
+        }
+    }
 
+    private class MyComp implements Comparator<String> {
+        public int compare(String s1, String s2) {
+            String s1num = s1.substring(1);
+            String s2num = s2.substring(1);
+            int num1 = Integer.parseInt(s1num);
+            int num2 = Integer.parseInt(s2num);
+            return (num1 < num2 ? -1 : 1);
+        }
+    }*/
 }
