@@ -275,6 +275,9 @@ public class TransactionManager {
 
         ValueTimeStamp update = new ValueTimeStamp(newValue, time);
         for (Site site : sitesWithVariable) {
+            if (site.getSiteStatus() == SiteStatus.FAILED) {
+                continue;
+            }
             site.updateValueOfVariable(variable, update);
             if (site.getSiteStatus() == SiteStatus.RECOVERED) {
                 site.alterReadPermissionForVariable(variable);
