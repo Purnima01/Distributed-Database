@@ -3,7 +3,6 @@
  * Eg: R(T2, x5).
  */
 
-//todo: add dump stuff constructors later
 public class Command {
     private Operation operation;
     private String txn;
@@ -89,6 +88,7 @@ public class Command {
     public int getDumpValue() {
         return dumpValue;
     }
+
     /**
      * Use this for write commands. Eg: W(T1, x3, 10);
      * @param value: value to be written. In the above eg., 10.

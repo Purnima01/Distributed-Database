@@ -1,5 +1,5 @@
 /**
- * Indicates the current status of a site.
+ * Indicates the current status of a site
  */
 public enum SiteStatus {
     ACTIVE, FAILED, RECOVERED;

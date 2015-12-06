@@ -5,7 +5,7 @@ import java.util.*;
  * This class is responsible for coordinating the
  * activities of all the transactions on the distributed
  * database. It oversees the management of all the sites
- * and overall management of the database.
+ * and overall management of the distributed database.
  */
 public class TransactionManager {
     static final int SITES = 11;
@@ -15,7 +15,6 @@ public class TransactionManager {
     //Variables and the sites they are present on
     private Map<String, List<Site>> variableLocationMap;
 
-    //10 sites, ignoring site[0]
     private Site[] sites;
 
     private List<Command> pendingCommands;
@@ -60,7 +59,6 @@ public class TransactionManager {
             ValueTimeStamp variableValue = initializeVariable(var);
             if (var % 2 == 0) {
                 for (Site site : sites) {
-                    //skip 0th site because there is no site there
                     if (site == null) {
                         continue;
                     }
@@ -130,7 +128,8 @@ public class TransactionManager {
             for (Command cmd : cmdsForLine) {
                 tm.executeCommand(cmd);
             }
-            //Traverse pending list to see if any command can be processed after executing recent commands
+            /*Traverse pending list to see if any command can
+            be processed after executing current list of commands*/
             tm.executeCommandsInPendingList();
         }
         System.out.println("Number of pending commands = " + tm.pendingCommands.size());
@@ -235,13 +234,12 @@ public class TransactionManager {
         dumpSiteHelp(site);
     }
 
-    /**Prints all variable values on the site*/
     private void dumpSiteHelp(Site site) {
         System.out.println("Variables on site " + site.getId());
         site.printVariableValuesOnSite();
     }
 
-    /**call this on encountering end cmd*/
+    /**Call this on encountering end cmd*/
     public void signalCommitAndReceiveChanges(Transaction txn) {
         if (!canRunTxn(txn)) {
             return;
@@ -308,7 +306,6 @@ public class TransactionManager {
     }
 
     private boolean isEven(String variable) {
-        //0th character is 'x' in 'x20'
         int varNum = Integer.parseInt(variable.substring(1));
         if ((varNum % 2) == 0) {
             return true;
@@ -430,7 +427,6 @@ public class TransactionManager {
         }
 
         Site serveSite = findSiteThatCanServeRequestedVariable(varToAccess, txn);
-        //txn has to wait till site becomes available - add cmd to pendinglist
         if (serveSite == null) {
             putCommandInPendingListIfAbsent(cmd);
             return;
@@ -450,7 +446,7 @@ public class TransactionManager {
             return;
         }
 
-        //no write lock, safe to add a read lock to the var on site
+        //no write lock, safe to add a read lock to the variable on site
         addReadLock(varToAccess, serveSite, currentTxn);
         removeCommandFromPendingListIfPresent(cmd);
     }
@@ -473,7 +469,6 @@ public class TransactionManager {
 
         int startTimeTxn = txn.getStartTime();
         Site serveSite = findSiteThatCanServeRequestedVariable(varToAccess, txn);
-        //txn has to wait till site becomes available - add cmd to pendinglist
         if (serveSite == null) {
             putCommandInPendingListIfAbsent(cmd);
             return;
@@ -556,7 +551,6 @@ public class TransactionManager {
                 continue;
             }
             List<Lock> locksOnVar = site.getLocksForVariable(varToAccess);
-            //no existing lock on variable on this site
             if (locksOnVar == null) {
                 continue;
             }

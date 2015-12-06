@@ -2,16 +2,21 @@ import java.util.*;
 
 /**
  * Denotes the database at a particular site
+ * Even-indexed data items are replicated at
+ * every site. Odd-indexed data items are found
+ * at sites (1 + (index % 10))
+ * Note: 'variable' and 'data item' used interchangeably
  */
 public class Site {
     private int id;
     private SiteStatus siteStatus;
-    //Variables on site and whether that variable can be read from this site
+    //Variables on this site and permission to read the variable on this site
     private Map<String, Boolean> variablesOnSite;
+    //Variable and value-time history of the variable
     private Map<String, List<ValueTimeStamp>> variableValues;
-    //Transactions that accessed any data item on this site
+    //Transactions that accessed any variable on this site
     private Set<String> transactionsOnSite;
-    //String corresponds to variable that is locked on site
+    //Variable and list of locks on this variable at this site
     private Map<String, List<Lock>> lockMap;
 
 
@@ -24,6 +29,11 @@ public class Site {
         variableValues = new HashMap<String, List<ValueTimeStamp>>();
     }
 
+    /**
+     * If all replicated variables have been written
+     * to after site-recovery, the status of the site can
+     * be changed back to ACTIVE
+     */
     public boolean allEvenVariablesWrittenToAfterRecovery() {
         Set<String> allVariablesOnSite = variablesOnSite.keySet();
         for (String variable : allVariablesOnSite) {
@@ -95,8 +105,9 @@ public class Site {
         return lockMap.get(var);
     }
 
-    public void addToLockMap(Lock newReadLock) {
-        String variable = newReadLock.getVariableLocked();
+    /** Add lock to the list of locks for the variable to be locked */
+    public void addToLockMap(Lock newLock) {
+        String variable = newLock.getVariableLocked();
         List<Lock> locksForVariable;
 
         if (!lockMap.containsKey(variable)) {
@@ -104,7 +115,7 @@ public class Site {
         } else {
             locksForVariable = lockMap.get(variable);
         }
-        locksForVariable.add(newReadLock);
+        locksForVariable.add(newLock);
         lockMap.put(variable, locksForVariable);
     }
 
@@ -122,13 +133,6 @@ public class Site {
         String variableCorrespondingToLock = lockToRemove.getVariableLocked();
         List<Lock> getLockList = lockMap.get(variableCorrespondingToLock);
         getLockList.remove(lockToRemove);
-    }
-    //deb:
-    public void printLock(String v) {
-        List<Lock> ll = lockMap.get(v);
-        for (Lock l : ll) {
-            System.out.println("Lock held by trans " + l.getTxnIdHoldingLock());
-        }
     }
 
     public void printSpecificVariableValue(String var) {

@@ -7,7 +7,7 @@ import java.util.Scanner;
 /**
  * Class to handle input of commands read in from file.
  * Stores the command in a Command object that it returns
- * to the TransactionManager.
+ * to the TransactionManager for appropriate processing.
  */
 public class ReadFileInput {
 
@@ -37,15 +37,18 @@ public class ReadFileInput {
     }
 
     /**
-     * returns the co-temporous events on a line as
-     * individual commands to the TM in the following steps:
-     * 1. break up line into co-temporous command strings
+     * returns the contemporaneous events (on the same line of input)
+     * as individual commands to the TM in the following steps:
+     * 1. break up line into contemporaneous command strings
      * 2. remove all whitespaces in each command string
      * 3. find which constructor this command should invoke
      *      - for begin, first check if it matches beginRO
      * 4. call the constructor with the appropriate values
      *      - for writes, also set write value
-     * 5. accumulate the commands in a List and return this
+     * 5. accumulate the commands in a List and return List
+     *
+     * As test input commands follow an established pattern
+     * (eg. W(T1,x2,1)), some numbers have been hardcoded
      */
     private List<Command> parseCurrentLineIntoCommands(String line) {
         String[] commandStrings = line.split("; ");

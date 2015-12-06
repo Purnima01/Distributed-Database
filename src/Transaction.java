@@ -8,15 +8,15 @@ public class Transaction {
     private String id;
     private TransactionStatus status;
 
-    //integer corresponds to site where lock is held
+    //Site where lock is held and list of locks held by txn on that site
     private Map<Integer, List<Lock>> locksHeldByTxn;
     private Set<Integer> sitesAccessed;
+     /*
+      * modifiedVariables:
+      * Local cache for written-to variables;
+      * String = variable name, Integer = value written by this txn
+      */
     private Map<String, Integer> modifiedVariables;
-    /*
-     * modifiedVariables:
-     * Local cache for written-to variables;
-     * String = variable name, Integer = value written by txn
-     */
     private final TransactionType type;
 
     public Transaction(int beginTime, String txnId, TransactionType txnType) {
@@ -148,7 +148,7 @@ public class Transaction {
         return false;
     }
 
-    /**Reads value from local storage if exists*/
+    /**Reads value from local storage*/
     public void readValueFromModifiedVariables(String varToAccess) {
         System.out.println("Value of " + varToAccess +  " read by "
                 + getId() + " is " + modifiedVariables.get(varToAccess));
