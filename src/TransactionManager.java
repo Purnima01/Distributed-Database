@@ -139,6 +139,7 @@ public class TransactionManager {
         commandsToRemoveFromPendingListForThisRound.clear();
         for (Command pending : pendingCommands) {
             executeCommand(pending);
+            //commandsToRemoveFromPendingListForThisRound.add(pending);
         }
         for (Command command : commandsToRemoveFromPendingListForThisRound) {
             pendingCommands.remove(command);
@@ -423,6 +424,7 @@ public class TransactionManager {
 
     private void processRWtxn(Transaction txn, String varToAccess, Command cmd) {
         if (!canRunTxn(txn)) {
+            removeCommandFromPendingListIfPresent(cmd);
             return;
         }
 
@@ -434,7 +436,8 @@ public class TransactionManager {
 
         if (serveSite.presentInLocalStorage(txn.getId(), varToAccess)) {
             int valueRead = serveSite.getFromLocalStorage(txn.getId(), varToAccess);
-            printVariableValueRead(varToAccess, txn, serveSite);
+            System.out.println("Value of " + varToAccess + " read by " + txn.getId() +
+                                " = " + valueRead + " at site " + serveSite.getId());
             return;
         }
 
@@ -470,6 +473,7 @@ public class TransactionManager {
 
     private void processROtxn(Transaction txn, String varToAccess, Command cmd) {
         if (!canRunTxn(txn)) {
+            removeCommandFromPendingListIfPresent(cmd);
             return;
         }
 
@@ -504,6 +508,7 @@ public class TransactionManager {
 
     private void processWrite(Transaction txn, String varToAccess, int valToWrite, Command cmd) {
         if (!canRunTxn(txn)) {
+            removeCommandFromPendingListIfPresent(cmd);
             return;
         }
         /*
