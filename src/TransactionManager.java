@@ -139,7 +139,6 @@ public class TransactionManager {
         commandsToRemoveFromPendingListForThisRound.clear();
         for (Command pending : pendingCommands) {
             executeCommand(pending);
-            //commandsToRemoveFromPendingListForThisRound.add(pending);
         }
         for (Command command : commandsToRemoveFromPendingListForThisRound) {
             pendingCommands.remove(command);
