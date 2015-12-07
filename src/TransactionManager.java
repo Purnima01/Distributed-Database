@@ -197,6 +197,7 @@ public class TransactionManager {
                 txnID = cmd.getTransaction();
                 Transaction txnAboutToCommit = transactionMap.get(txnID);
                 signalCommitAndReceiveChanges(txnAboutToCommit);
+                txnAboutToCommit.commit(sites);
                 break;
 
             case DUMP:
@@ -244,16 +245,23 @@ public class TransactionManager {
         if (!canRunTxn(txn)) {
             return;
         }
-        Map<String, Integer> modifiedVariables = txn.commitAndPushChanges(sites);
-        //for each changed variable, propagate change to all sites
-        Set<String> variablesChanged = modifiedVariables.keySet();
-        //txn performed no writes
-        if (variablesChanged.size() == 0) {
-            return;
-        }
-        for (String variable : variablesChanged) {
-            int newValue = modifiedVariables.get(variable);
-            updateGlobalValueOfVariable(variable, newValue);
+
+        Set<Integer> sitesAccessed = txn.getSitesAccessed();
+        for (Integer siteID : sitesAccessed) {
+            Site site = sites[siteID];
+            Map<String, Integer> modifiedVariables = site.getVariablesModified(txn.getId());
+            //no writes by txn on this site
+            if (modifiedVariables == null || modifiedVariables.size() == 0) {
+                continue;
+            }
+
+            Set<String> variablesChanged = modifiedVariables.keySet();
+            for (String variable : variablesChanged) {
+                int newValue = modifiedVariables.get(variable);
+                updateGlobalValueOfVariable(site, variable, newValue);
+            }
+            //remove committed txn from the scratch-pad of site
+            site.removeFromLocalStorage(txn.getId());
         }
     }
 
@@ -265,26 +273,18 @@ public class TransactionManager {
      * in variableValues of the site. This list will not include a failed site as
      * the transaction would have been aborted if a site it had written to had failed.
      */
-    public void updateGlobalValueOfVariable(String variableToUpdate, int newValue) {
-        List<Site> sitesWithVariable = variableLocationMap.get(variableToUpdate);
-        propagateUpdatedVariableToRelevantSites(variableToUpdate, newValue, sitesWithVariable);
-    }
-
-    private void propagateUpdatedVariableToRelevantSites(String variable,
-                 int newValue, List<Site> sitesWithVariable) {
+    public void updateGlobalValueOfVariable(Site site, String variableToUpdate, int newValue) {
+        if (site.getSiteStatus() == SiteStatus.FAILED) {
+            return;
+        }
 
         ValueTimeStamp update = new ValueTimeStamp(newValue, time);
-        for (Site site : sitesWithVariable) {
-            if (site.getSiteStatus() == SiteStatus.FAILED) {
-                continue;
-            }
-            site.updateValueOfVariable(variable, update);
-            if (site.getSiteStatus() == SiteStatus.RECOVERED) {
-                site.alterReadPermissionForVariable(variable);
-            }
-            if (site.allEvenVariablesWrittenToAfterRecovery()) {
-                site.setSiteStatus(SiteStatus.ACTIVE);
-            }
+        site.updateValueOfVariable(variableToUpdate, update);
+        if (site.getSiteStatus() == SiteStatus.RECOVERED) {
+            site.alterReadPermissionForVariable(variableToUpdate);
+        }
+        if (site.allEvenVariablesWrittenToAfterRecovery()) {
+            site.setSiteStatus(SiteStatus.ACTIVE);
         }
     }
 
@@ -319,6 +319,7 @@ public class TransactionManager {
     private void processFail(int siteNumberToFail) {
         Site siteToFail = sites[siteNumberToFail];
         siteToFail.setSiteStatus(SiteStatus.FAILED);
+        siteToFail.clearLocalStorage();
         Set<String> allTransactionsOnSite = siteToFail.getTransactionsOnSite();
         List<Transaction> abortTxnListForSite = new ArrayList<Transaction>();
 
@@ -328,7 +329,8 @@ public class TransactionManager {
         }
 
         for (Transaction transaction : abortTxnListForSite) {
-            String reasonForAbort = ("site " + siteNumberToFail + " has failed");
+            String reasonForAbort = ("Transaction " + transaction.getId() +
+                    " has been aborted because site " + siteNumberToFail + " has failed");
             transaction.abort(sites, reasonForAbort);
         }
     }
@@ -424,14 +426,15 @@ public class TransactionManager {
             return;
         }
 
-        if (txn.variablePresentInModifiedVariables(varToAccess)) {
-            txn.readValueFromModifiedVariables(varToAccess);
-            return;
-        }
-
         Site serveSite = findSiteThatCanServeRequestedVariable(varToAccess, txn);
         if (serveSite == null) {
             putCommandInPendingListIfAbsent(cmd);
+            return;
+        }
+
+        if (serveSite.presentInLocalStorage(txn.getId(), varToAccess)) {
+            int valueRead = serveSite.getFromLocalStorage(txn.getId(), varToAccess);
+            printVariableValueRead(varToAccess, txn, serveSite);
             return;
         }
 
@@ -503,14 +506,20 @@ public class TransactionManager {
         if (!canRunTxn(txn)) {
             return;
         }
-
-        if (txn.variablePresentInModifiedVariables(varToAccess)) {
-            txn.writeToLocalValue(varToAccess, valToWrite);
+        /*
+        * if txn already has a write-lock on this variable, just modify the
+        * value of the variable in the local storage of all containing, accessible
+        * sites and return. Do not re-obtain or convert existing write lock as that's
+        * confusing and could get very buggy.
+        */
+        if (processRepeatedWritesSameTxn(txn.getId(), varToAccess, valToWrite)) {
             return;
         }
+
         List<Lock> existingReadLocksForTxn = new ArrayList<Lock>();
         WriteOperationStatus result = attemptToWrite(varToAccess,
                 txn, cmd, existingReadLocksForTxn);
+
         if (result == WriteOperationStatus.ABORTED) {
             return;
         } else if (result == WriteOperationStatus.WAIT) {
@@ -521,15 +530,47 @@ public class TransactionManager {
         }
     }
 
+    /**
+     * @return true if this is not the first write to the variable by this txn
+     *         false otherwise
+     */
+    private boolean processRepeatedWritesSameTxn(String txnID, String varToAccess, int valToWrite) {
+        List<Site> sitesWithVariable = variableLocationMap.get(varToAccess);
+        boolean atleastOneSiteHasVariableInLocalStorage = false;
+        for (Site site : sitesWithVariable) {
+            if (site.getSiteStatus() == SiteStatus.FAILED) {
+                continue;
+            }
+            if (site.presentInLocalStorage(txnID, varToAccess)) {
+                atleastOneSiteHasVariableInLocalStorage = true;
+                break;
+            }
+        }
+
+        //first time write to variable by this txn
+        if (!atleastOneSiteHasVariableInLocalStorage) {
+            return false;
+        }
+        //else: update value on all sites that txn originally wrote to for the first time
+        for (Site site : sitesWithVariable) {
+            if (site.getSiteStatus() == SiteStatus.FAILED) {
+                continue;
+            }
+            site.addToLocalStorage(txnID, varToAccess, valToWrite);
+        }
+        return true;
+    }
+
     private void executeWrite(String varToAccess, int valToWrite,
             List<Lock> existingReadLocksForTxn, Transaction txn) {
         List<Site> sitesWithVariable = variableLocationMap.get(varToAccess);
-        txn.addToModifiedVariables(varToAccess, valToWrite);
 
         for (Site site : sitesWithVariable) {
             if (site.getSiteStatus() == SiteStatus.FAILED) {
                 continue;
             }
+            //add to variable-value to local storage/scratch-pad of every containing site
+            site.addToLocalStorage(txn.getId(), varToAccess, valToWrite);
             //add write lock on every active site that has variable
             addLock(varToAccess, site, txn, LockType.WRITELOCK);
             //remove all read locks held by this txn on this variable at any site (from prv step)

@@ -11,16 +11,10 @@ public class Transaction {
     //Site where lock is held and list of locks held by txn on that site
     private Map<Integer, List<Lock>> locksHeldByTxn;
     private Set<Integer> sitesAccessed;
-     /*
-      * modifiedVariables:
-      * Local cache for written-to variables;
-      * String = variable name, Integer = value written by this txn
-      */
-    private Map<String, Integer> modifiedVariables;
+
     private final TransactionType type;
 
     public Transaction(int beginTime, String txnId, TransactionType txnType) {
-        modifiedVariables = new HashMap<String, Integer>();
         startTime = beginTime;
         id = txnId;
         status = TransactionStatus.ACTIVE;
@@ -65,19 +59,31 @@ public class Transaction {
     }
 
     public void abort(Site[] sites, String reasonForAbort) {
-        status = TransactionStatus.ABORTED;
+        performActionAndCleanUp(TransactionStatus.ABORTED, reasonForAbort, sites);
+    }
 
+    public void commit(Site[] sites) {
+        if (status == TransactionStatus.ABORTED) {
+            return;
+        }
+        String printMsg = "Transaction " + id + " has committed";
+        performActionAndCleanUp(TransactionStatus.COMMITTED, printMsg, sites);
+    }
+
+    private void performActionAndCleanUp(TransactionStatus status, String printMsg,
+                                        Site[] sites) {
+        this.status = status;
         removeSelfFromAccessedSites(sites);
-
-        System.out.println(reasonForAbort);
-
+        System.out.println(printMsg);
         releaseAllLocksHeld(sites);
-
         reclaimSpace();
     }
 
     private void releaseAllLocksHeld(Site[] sites) {
         if (type == TransactionType.REGULAR) {
+            if (locksHeldByTxn == null) {
+                return;
+            }
             Set<Integer> sitesAccessed = locksHeldByTxn.keySet();
             for (Integer site : sitesAccessed) {
                 List<Lock> lockList = locksHeldByTxn.get(site);
@@ -89,33 +95,19 @@ public class Transaction {
     }
 
     private void removeSelfFromAccessedSites(Site[] sites) {
+        if (sitesAccessed == null) {
+            return;
+        }
         for (Integer accessedSiteId : sitesAccessed) {
             Site siteAccessed = sites[accessedSiteId];
+            siteAccessed.removeFromLocalStorage(id);
             siteAccessed.removeTransaction(id);
         }
     }
 
     private void reclaimSpace() {
-        modifiedVariables = null;
         locksHeldByTxn = null;
         sitesAccessed = null;
-    }
-
-    /**
-     * Commits and sends any modified variables back to the tm. Warning: sends
-     * the actual object. Any changes made to the object will be reflected in the
-     * actual data structure in the transaction.
-     */
-    public Map<String, Integer> commitAndPushChanges(Site[] sites) {
-        removeSelfFromAccessedSites(sites);
-        releaseAllLocksHeld(sites);
-        status = TransactionStatus.COMMITTED;
-        System.out.println("Transaction " + id + " has committed");
-        return modifiedVariables;
-    }
-
-    public boolean variablePresentInModifiedVariables(String variable) {
-        return (modifiedVariables.containsKey(variable));
     }
 
     public void addSiteToTxn(int siteid) {
@@ -148,37 +140,8 @@ public class Transaction {
         return false;
     }
 
-    /**Reads value from local storage*/
-    public void readValueFromModifiedVariables(String varToAccess) {
-        System.out.println("Value of " + varToAccess +  " read by "
-                + getId() + " is " + modifiedVariables.get(varToAccess));
-    }
-
-    public void writeToLocalValue(String varToAccess, int valToWrite) {
-        addToModifiedVariables(varToAccess, valToWrite);
-    }
-
-    /**
-     * TM calls this when a transaction wants to write
-     * to a variable and variable is not already in
-     * modifiedVariables.
-     * Adds a variable to this modifiedVariables iff:
-     * 1. Transaction wants to write to the variable
-     * 2. Transaction SUCCESSFULLY obtained the lock
-     * on this variable. Does not add if the transaction
-     * is currently waiting on this variable.
-     *
-     * All reads/writes for this txn must first check for
-     * variables in modifiedVariables.
-     *
-     * @param varToAccess variable to be added.
-     * @param valToWrite the value of variable in permanent
-     * storage on the TM.
-     */
-    public void addToModifiedVariables(String varToAccess, int valToWrite) {
-        modifiedVariables.put(varToAccess, valToWrite);
-        System.out.println("Transaction " + getId() + " wrote " +
-                varToAccess + " = " + valToWrite + " to local storage");
+    public Set<Integer> getSitesAccessed() {
+        return sitesAccessed;
     }
 }
 

@@ -18,9 +18,11 @@ public class Site {
     private Set<String> transactionsOnSite;
     //Variable and list of locks on this variable at this site
     private Map<String, List<Lock>> lockMap;
-
+    //<TxnID, <Variable, Value>>
+    private Map<String, Map<String, Integer>> localStorage;
 
     public Site(int siteID) {
+        localStorage = new HashMap<String, Map<String, Integer>>();
         siteStatus = SiteStatus.ACTIVE;
         id = siteID;
         variablesOnSite = new HashMap<String, Boolean>();
@@ -149,6 +151,46 @@ public class Site {
         for (String var : orderedVars) {
             printSpecificVariableValue(var);
         }
+    }
+
+    public boolean presentInLocalStorage(String txnID, String varToAccess) {
+        if (!localStorage.containsKey(txnID)) {
+            return false;
+        }
+        Map<String, Integer> variableValueLocalMap = localStorage.get(txnID);
+        if (!variableValueLocalMap.containsKey(varToAccess)) {
+            return false;
+        }
+        return true;
+    }
+
+    public int getFromLocalStorage(String txnID, String varToAccess) {
+        return ((localStorage.get(txnID)).get(varToAccess));
+    }
+
+    public void addToLocalStorage(String txnID, String varToAccess, int value) {
+        Map<String, Integer> correspondingVariableMapForTxn;
+        if (!localStorage.containsKey(txnID)) {
+            correspondingVariableMapForTxn = new HashMap<String, Integer>();
+        } else {
+            correspondingVariableMapForTxn = localStorage.get(txnID);
+        }
+        correspondingVariableMapForTxn.put(varToAccess, value);
+        localStorage.put(txnID, correspondingVariableMapForTxn);
+        System.out.println("Transaction " + txnID + " wrote " + varToAccess +
+            " = " + value + " to scratch-pad on site " + id);
+    }
+
+    public Map<String,Integer> getVariablesModified(String txnID) {
+        return localStorage.get(txnID);
+    }
+
+    public void clearLocalStorage() {
+        localStorage.clear();
+    }
+
+    public void removeFromLocalStorage(String txnId) {
+        localStorage.remove(txnId);
     }
 
     private class MyComp implements Comparator<String> {
