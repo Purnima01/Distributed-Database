@@ -41,8 +41,7 @@ public class TransactionManager {
     }
 
     private ValueTimeStamp initializeVariable(int variable) {
-            String value = "10" + String.valueOf(variable);
-            int initVal = Integer.parseInt(value);
+            int initVal = 10 * variable;
             int initTime = 0;
             ValueTimeStamp varVal = new ValueTimeStamp(initVal, initTime);
             return varVal;
