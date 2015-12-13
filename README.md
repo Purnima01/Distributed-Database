@@ -3,7 +3,7 @@
 A small distributed database with concurrency control, deadlock avoidance, fault tolerance and
 failure recovery.
 
-A very brief overview of the algorithms used:
+A brief overview of the algorithms used:
 
 1. Available copies algorithm for data replication to enhance fault tolerance.
 
