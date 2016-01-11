@@ -177,8 +177,6 @@ public class Site {
         }
         correspondingVariableMapForTxn.put(varToAccess, value);
         localStorage.put(txnID, correspondingVariableMapForTxn);
-        /*System.out.println("Transaction " + txnID + " wrote " + varToAccess +
-            " = " + value + " to scratch-pad on site " + id);*/
     }
 
     public Map<String,Integer> getVariablesModified(String txnID) {
