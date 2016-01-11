@@ -18,7 +18,7 @@ public class Site {
     private Set<String> transactionsOnSite;
     //Variable and list of locks on this variable at this site
     private Map<String, List<Lock>> lockMap;
-    //<TxnID, <Variable, Value>>
+    //<TxnID, <Variable (temporarily) modified by the txn, Value of the variable written by txn>>
     private Map<String, Map<String, Integer>> localStorage;
 
     public Site(int siteID) {
