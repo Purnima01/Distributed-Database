@@ -2,6 +2,7 @@ import java.util.*;
 
 /**
  * Represents transactions: Regular(RW) and Read-Only(RO)
+ * and other relevant properties
  */
 public class Transaction {
     private final int startTime;
