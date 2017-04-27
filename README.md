@@ -2,6 +2,8 @@
 
 A small distributed database with concurrency control, deadlock avoidance, fault tolerance and
 failure recovery.
+http://cs.nyu.edu/courses/fall15/CSCI-GA.2434-001/handDB2.pdf
+http://cs.nyu.edu/courses/fall16/CSCI-GA.2434-001/transproc.pdf
 
 A brief overview of the algorithms used:
 
