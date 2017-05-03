@@ -9,7 +9,7 @@ public class Transaction {
     private String id;
     private TransactionStatus status;
 
-    //Site where lock is held and list of locks held by txn on that site
+    //Sites where locks are held and list of locks held by txn on that site - <site id, lock list>
     private Map<Integer, List<Lock>> locksHeldByTxn;
     private Set<Integer> sitesAccessed;
 
