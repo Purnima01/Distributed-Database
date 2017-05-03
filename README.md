@@ -17,4 +17,4 @@ A brief overview of the algorithms used:
 
 3. Avoided deadlocks using the wait-die protocol, in which an older transaction waits for a younger one that holds a conflicting lock on the data item of interest, but a younger transaction will abort instead of waiting for an older one.
 
-4. Failure-recovery: Unreplicated data is available immediately for reading on a recovered site. Replicated data items on a recovered site are available for writing, but not for reading until a committed write has taken place on the data item at the recovered site. This is to enforce consistency, as the locks held by transactions on a site can be lost when the site fails.
+4. Failure-recovery: Unreplicated data is available immediately for reading on a recovered site. Replicated data items on a recovered site are available for writing, but not for reading until a committed write has taken place on the data item at the recovered site. This is to enforce consistency, so that the db at the recovered site doesn't return stale information, in case of any updates while the site was down.
