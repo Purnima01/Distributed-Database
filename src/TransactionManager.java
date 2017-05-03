@@ -11,6 +11,7 @@ public class TransactionManager {
     static final int SITES = 11;
     private int time = 0;
 
+    //Gets corresponding txn object given txn id in command
     private Map<String, Transaction> transactionMap;
     //Variables and the sites they are present on
     private Map<String, List<Site>> variableLocationMap;
@@ -109,6 +110,9 @@ public class TransactionManager {
         }
     }
 
+    /**
+     * Store the site-txn information -- useful in case of site failure
+     */
     private void updateSiteAndTransactionRecords(Site serveSite, Transaction txn) {
         serveSite.addTxnToSite(txn.getId());
         txn.addSiteToTxn(serveSite.getId());
@@ -334,7 +338,7 @@ public class TransactionManager {
         }
     }
 
-    /*Used by RW txns only*/
+    //Used by RW txns only - get latest committed value of variable regardless of txn start time
     private void printVariableValueRead(String varToAccess,
           Transaction txn, Site serveSite) {
 
@@ -378,9 +382,9 @@ public class TransactionManager {
         }
         return serveSite;
     }
-
-    private boolean existsWriteLockOnVariableByAnotherTransaction(Command cmd,
-           String varToAccess, Transaction currentTxn, Site serveSite) {
+    
+    private boolean existsWriteLockOnVariableByAnotherTransaction(
+            String varToAccess, Site serveSite) {
 
         List<Lock> locksOnVariableOnServeSite = serveSite.getLocksForVariable(varToAccess);
         //no locks for this variable on site yet
@@ -390,26 +394,10 @@ public class TransactionManager {
 
         for (Lock lock : locksOnVariableOnServeSite) {
             if (lock.getTypeOfLock() == LockType.WRITELOCK) {
-                String txnIdHoldingLock = lock.getTxnIdHoldingLock();
-                Transaction txnHoldingLock = transactionMap.get(txnIdHoldingLock);
-                if (currentTxn.isYoungerThan(txnHoldingLock)) {
-                    String reasonForAbort = ("Transaction " + currentTxn.getId() +
-                            " was aborted (wait-die) because it was waiting on a lock" +
-                            " held by Transaction " + txnHoldingLock.getId());
-                    currentTxn.abort(sites, reasonForAbort);
-                } else {
-                    //currentTxn is older than owner of lock; so it must wait for owner to complete
-                    putCommandInPendingListIfAbsent(cmd);
-                }
                 return true;
             }
         }
         return false;
-    }
-
-    private void addReadLock(String varToAccess, Site serveSite, Transaction currentTxn) {
-        addLock(varToAccess, serveSite, currentTxn, LockType.READLOCK);
-        printVariableValueRead(varToAccess, currentTxn, serveSite);
     }
 
     private void addLock(String varToAccess, Site site, Transaction txn, LockType lockType) {
@@ -428,11 +416,18 @@ public class TransactionManager {
 
         Site serveSite = findSiteThatCanServeRequestedVariable(varToAccess, txn);
         if (serveSite == null) {
+            //perhaps site containing variable is currently down and might come back up later
             putCommandInPendingListIfAbsent(cmd);
             return;
         }
 
         if (serveSite.presentInLocalStorage(txn.getId(), varToAccess)) {
+            /* 
+               if var was modified by txn but not committed (present in site's local storage
+               against txn), read this value - assumption is that this is the most recent value
+               of the variable and the txn modified it for a reason, even though it hasn't committed,
+               and will most likely base future decisions on this recently edited value
+             */
             int valueRead = serveSite.getFromLocalStorage(txn.getId(), varToAccess);
             System.out.println("Value of " + varToAccess + " read by " + txn.getId() +
                                 " = " + valueRead + " at site " + serveSite.getId());
@@ -448,14 +443,38 @@ public class TransactionManager {
 
         Transaction currentTxn = txn;
 
-        if (existsWriteLockOnVariableByAnotherTransaction(cmd, varToAccess,
-                currentTxn, serveSite)) {
+        if (existsWriteLockOnVariableByAnotherTransaction(varToAccess, serveSite)) {
+            performDeadlockDetection(serveSite, varToAccess, currentTxn, cmd);
             return;
         }
 
         //no write lock, safe to add a read lock to the variable on site
-        addReadLock(varToAccess, serveSite, currentTxn);
+        addLock(varToAccess, serveSite, currentTxn, LockType.READLOCK);
+        printVariableValueRead(varToAccess, currentTxn, serveSite);
         removeCommandFromPendingListIfPresent(cmd);
+    }
+    
+    /**
+     * Using wait-die
+     */
+    private void performDeadlockDetection(Site serveSite, String varToAccess,
+                                          Transaction currentTxn, Command cmd) {
+        List<Lock> locksOnVariableOnServeSite = serveSite.getLocksForVariable(varToAccess);
+        for (Lock lock : locksOnVariableOnServeSite) {
+            if (lock.getTypeOfLock() == LockType.WRITELOCK) {
+                String txnIdHoldingLock = lock.getTxnIdHoldingLock();
+                Transaction txnHoldingLock = transactionMap.get(txnIdHoldingLock);
+                if (currentTxn.isYoungerThan(txnHoldingLock)) {
+                    String reasonForAbort = ("Transaction " + currentTxn.getId() +
+                            " was aborted (wait-die) because it was waiting on a lock" +
+                            " held by Transaction " + txnHoldingLock.getId());
+                    currentTxn.abort(sites, reasonForAbort);
+                } else {
+                    //currentTxn is older than owner of lock; so it must wait for owner to complete
+                    putCommandInPendingListIfAbsent(cmd);
+                }
+            }
+        }
     }
 
     private void printVariableValueReadByROTransaction(int index,
@@ -476,6 +495,7 @@ public class TransactionManager {
         }
 
         int startTimeTxn = txn.getStartTime();
+        
         Site serveSite = findSiteThatCanServeRequestedVariable(varToAccess, txn);
         if (serveSite == null) {
             putCommandInPendingListIfAbsent(cmd);
@@ -484,6 +504,7 @@ public class TransactionManager {
             //in case of site failure
             updateSiteAndTransactionRecords(serveSite, txn);
 
+            //RO-txns use multiversion read consistency -- hence, get last variable value before txn began
             List<ValueTimeStamp> valueHistoryForVariable =
                     serveSite.getValueHistoryOfVariable(varToAccess);
 
