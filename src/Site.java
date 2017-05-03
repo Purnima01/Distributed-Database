@@ -18,7 +18,8 @@ public class Site {
     private Set<String> transactionsOnSite;
     //Variable and list of locks on this variable at this site
     private Map<String, List<Lock>> lockMap;
-    //<TxnID, <Variable (temporarily) modified by the txn, Value of the variable written by txn>>
+    /* <TxnID, <Variable (temporarily) modified by the txn, Value of the variable written by txn>>
+     RW txns write var values to site's local storage before committing */
     private Map<String, Map<String, Integer>> localStorage;
 
     public Site(int siteID) {
@@ -157,6 +158,7 @@ public class Site {
         if (!localStorage.containsKey(txnID)) {
             return false;
         }
+        //<variable, variable value> modified by the transaction
         Map<String, Integer> variableValueLocalMap = localStorage.get(txnID);
         if (!variableValueLocalMap.containsKey(varToAccess)) {
             return false;
